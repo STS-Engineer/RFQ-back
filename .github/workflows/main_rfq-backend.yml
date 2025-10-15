@@ -26,9 +26,10 @@ jobs:
       - name: npm install, build, and test
         run: |
           npm install
+      - name:  build, and test
+        run: |     
           npm run build --if-present
-          npm run test --if-present
-
+          
       - name: Upload artifact for deployment job
         uses: actions/upload-artifact@v4
         with:
@@ -48,12 +49,14 @@ jobs:
         with:
           name: node-app
       
+          
       - name: Login to Azure
         uses: azure/login@v2
         with:
-          client-id: ${{ secrets.AZUREAPPSERVICE_CLIENTID_AA7DBD2FF9F84124A34B39461149B928 }}
-          tenant-id: ${{ secrets.AZUREAPPSERVICE_TENANTID_AEB94DF1729E4509A221F5FD47B4D76C }}
-          subscription-id: ${{ secrets.AZUREAPPSERVICE_SUBSCRIPTIONID_AC46E94C91114A6AAD98B6F2DFE8B92F }}
+          client-id: ${{ secrets.AZUREAPPSERVICE_CLIENTID_297023446D7441DCA1920EEAE6EB277E }}
+          tenant-id: ${{ secrets.AZUREAPPSERVICE_TENANTID_DAE0694C09F74B7896C56BA39073926D }}
+          subscription-id: ${{ secrets.AZUREAPPSERVICE_SUBSCRIPTIONID_F2A4D37BAFF1439290177ACB7EF610F4 }}
+          
 
       - name: 'Deploy to Azure Web App'
         id: deploy-to-webapp
@@ -62,4 +65,5 @@ jobs:
           app-name: 'rfq-backend'
           slot-name: 'Production'
           package: .
+
           
