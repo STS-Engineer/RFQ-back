@@ -24,7 +24,7 @@ jobs:
         run: echo "CI=false" >> $GITHUB_ENV
 
       - name: Install deps
-        run: npm ci
+        run: npm install
 
       - name: Build
         run: npm run build
@@ -52,3 +52,4 @@ jobs:
           slot-name: 'Production'
           package: ./node-app        # point to the downloaded build folder
           publish-profile: ${{ secrets.AZUREAPPSERVICE_PUBLISHPROFILE_AB5D01BC54234E28BE81BF92D0EA1B56 }}
+
