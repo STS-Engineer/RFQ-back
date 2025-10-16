@@ -18,5 +18,9 @@ app.use(express.json());
 // Routes
 app.use('/ajouter', rfqrouter);
 
+const port = process.env.PORT ? Number(process.env.PORT) : 8080;
 
-app.listen(() => console.log(`Server running on port `));
+// Bind to 0.0.0.0 so it’s reachable from outside the container
+app.listen(port, '0.0.0.0', () => {
+  console.log(`Server running on port ${port}`);
+});
