@@ -8,7 +8,19 @@ const rfqrouter = require('./services/rfqservice');
 
 const app = express();
 
+app.use(cors({
+  origin: 'https://rfq-management.azurewebsites.net',  // frontend domain
+  methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
+  allowedHeaders: ['Content-Type', 'Authorization'],
+  credentials: true
+}));
 
+app.options('*', (req, res) => {
+  res.header('Access-Control-Allow-Origin', 'https://rfq-management.azurewebsites.net');
+  res.header('Access-Control-Allow-Methods', 'GET, POST, PUT, DELETE, OPTIONS');
+  res.header('Access-Control-Allow-Headers', 'Content-Type, Authorization');
+  res.sendStatus(200);
+});
 
 // Middleware
 app.use(bodyParser.json({ limit: '50mb' }));
