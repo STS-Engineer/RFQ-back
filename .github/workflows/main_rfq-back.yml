@@ -12,28 +12,28 @@ permissions:
 jobs:
   build:
     runs-on: ubuntu-latest
+    permissions:
+      contents: read #This is required for actions/checkout
+
     steps:
       - uses: actions/checkout@v4
 
-      - name: Set up Node.js
+      - name: Set up Node.js version
         uses: actions/setup-node@v3
         with:
-          node-version: '20.x'   # LTS, widely compatible
+          node-version: '22.x'
 
-      - name: Disable CI checks
-        run: echo "CI=false" >> $GITHUB_ENV
+      - name: npm install, build, and test
+        run: |
+          npm install
+          npm run build --if-present
+          npm run test --if-present
 
-      - name: Install deps
-        run: npm install
-
-      - name: Build
-        run: npm run build
-
-      - name: Upload artifact (build output)
+      - name: Upload artifact for deployment job
         uses: actions/upload-artifact@v4
         with:
           name: node-app
-          path: dist   # upload the Vite build output
+          path: .
 
   deploy:
     runs-on: ubuntu-latest
@@ -52,4 +52,5 @@ jobs:
           slot-name: 'Production'
           package: ./node-app        # point to the downloaded build folder
           publish-profile: ${{ secrets.AZUREAPPSERVICE_PUBLISHPROFILE_AB5D01BC54234E28BE81BF92D0EA1B56 }}
+
 
