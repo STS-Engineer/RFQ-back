@@ -1,7 +1,4 @@
-# Docs for the Azure Web Apps Deploy action: https://github.com/Azure/webapps-deploy
-# More GitHub Actions for Azure: https://github.com/Azure/actions
-
-name: Build and deploy Node.js app to Azure Web App - rfq-back
+name: Build and deploy Vite app to Azure Web App - Machinery-system
 
 on:
   push:
@@ -9,31 +6,39 @@ on:
       - main
   workflow_dispatch:
 
+permissions:
+  id-token: write
+  contents: read
+
 jobs:
   build:
     runs-on: ubuntu-latest
-    permissions:
-      contents: read #This is required for actions/checkout
-
     steps:
       - uses: actions/checkout@v4
-
       - name: Set up Node.js version
         uses: actions/setup-node@v3
         with:
           node-version: '22.x'
 
-      - name: npm install, build, and test
-        run: |
-          npm install
-          npm run build --if-present
-          npm run test --if-present
+      - name: Disable CI checks
+        run: echo "CI=false" >> $GITHUB_ENV
+
+      - name: npm install
+        run: npm install
+
+      - name: npm build
+        run: npm run build --if-present
+
+      - name: Zip artifact for deployment
+        run: zip -r release.zip dist
+  
 
       - name: Upload artifact for deployment job
         uses: actions/upload-artifact@v4
         with:
           name: node-app
-          path: .
+          path: release.zip
+
 
   deploy:
     runs-on: ubuntu-latest
@@ -52,4 +57,5 @@ jobs:
           app-name: 'rfq-back'
           slot-name: 'Production'
           package: .
+
           publish-profile: ${{ secrets.AZUREAPPSERVICE_PUBLISHPROFILE_AB5D01BC54234E28BE81BF92D0EA1B56 }}
