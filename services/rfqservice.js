@@ -44,6 +44,8 @@ router.get("/rfq", async (req, res) => {
         m.validator_comments,
         m.status,
         m.created_at AS rfq_created_at,
+        m.created_by_email,
+        m.validated_by_email,
 
         -- Contact info
         c.contact_id,
