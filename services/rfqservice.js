@@ -24,6 +24,8 @@ router.get("/rfq", async (req, res) => {
         m.rfq_reception_date,
         m.quotation_expected_date,
         m.target_price_eur,
+        -- Calculate TO total
+        (m.target_price_eur * m.annual_volume * COALESCE(m.sop_year,1))::numeric(15,2) AS to_total,
         m.delivery_conditions,
         m.payment_terms,
         m.business_trigger,
@@ -75,6 +77,11 @@ router.get("/rfq", async (req, res) => {
         p.data->'rfq_payload'->>'rfq_reception_date' AS rfq_reception_date,
         p.data->'rfq_payload'->>'quotation_expected_date' AS quotation_expected_date,
         (p.data->'rfq_payload'->>'target_price_eur')::numeric AS target_price_eur,
+        -- Calculate TO total for pending
+        ((p.data->'rfq_payload'->>'target_price_eur')::numeric
+          * (p.data->'rfq_payload'->>'annual_volume')::int
+          * COALESCE((p.data->'rfq_payload'->>'sop_year')::int, 1)
+        )::numeric(15,2) AS to_total,
         p.data->'rfq_payload'->>'delivery_conditions' AS delivery_conditions,
         p.data->'rfq_payload'->>'payment_terms' AS payment_terms,
         p.data->'rfq_payload'->>'business_trigger' AS business_trigger,
@@ -109,36 +116,25 @@ router.get("/rfq", async (req, res) => {
     `;
     const pendingResult = await pool.query(pendingQuery);
 
-    // Process pending results to handle data type conversions
+    // Process pending results
     const processedPending = pendingResult.rows.map(row => {
       const processedRow = { ...row };
-      
+
       // Convert string booleans to actual booleans
       if (row.scope_alignment !== undefined && row.scope_alignment !== null) {
         processedRow.scope_alignment = String(row.scope_alignment).toLowerCase() === 'true';
       }
-      
+
       if (row.technical_capacity !== undefined && row.technical_capacity !== null) {
         processedRow.technical_capacity = String(row.technical_capacity).toLowerCase() === 'true';
       }
-      
-      if (row.overall_feasibility !== undefined && row.overall_feasibility !== null) {
-        processedRow.overall_feasibility = String(row.overall_feasibility);
-      }
-      
-      // Ensure numeric fields are properly typed
-      if (row.annual_volume !== undefined && row.annual_volume !== null) {
-        processedRow.annual_volume = parseInt(row.annual_volume) || 0;
-      }
-      
-      if (row.sop_year !== undefined && row.sop_year !== null) {
-        processedRow.sop_year = parseInt(row.sop_year) || 0;
-      }
-      
-      if (row.target_price_eur !== undefined && row.target_price_eur !== null) {
-        processedRow.target_price_eur = parseFloat(row.target_price_eur) || 0;
-      }
-      
+
+      // Ensure numeric fields
+      processedRow.annual_volume = parseInt(row.annual_volume) || 0;
+      processedRow.sop_year = parseInt(row.sop_year) || 0;
+      processedRow.target_price_eur = parseFloat(row.target_price_eur) || 0;
+      processedRow.to_total = parseFloat(row.to_total) || (processedRow.target_price_eur * processedRow.annual_volume * (processedRow.sop_year || 1));
+
       // Handle null/undefined values
       processedRow.risks = row.risks || 'N/A';
       processedRow.decision = row.decision || 'N/A';
@@ -149,12 +145,9 @@ router.get("/rfq", async (req, res) => {
       processedRow.validator_comments = row.validator_comments || 'N/A';
       processedRow.final_recommendation = row.final_recommendation || 'N/A';
       processedRow.development_costs = row.development_costs || 'N/A';
-      
+
       return processedRow;
     });
-
-    console.log("Processed Pending RFQs count:", processedPending.length);
-    console.log("Sample Pending RFQ:", processedPending[0]);
 
     // Group RFQs by status
     const groupedRfqs = {
@@ -163,18 +156,15 @@ router.get("/rfq", async (req, res) => {
       DECLINE: mainResult.rows.filter(r => r.status === 'DECLINE')
     };
 
-    console.log("Grouped RFQs counts - PENDING:", groupedRfqs.PENDING.length, 
-                "CONFIRM:", groupedRfqs.CONFIRM.length, 
-                "DECLINE:", groupedRfqs.DECLINE.length);
-
     res.status(200).json(groupedRfqs);
   } catch (error) {
     console.error("Error fetching grouped RFQ data:", error);
-    res.status(500).json({ 
+    res.status(500).json({
       message: "Server error fetching grouped RFQs",
-      error: error.message 
+      error: error.message
     });
   }
 });
+
 
 module.exports=  router;
