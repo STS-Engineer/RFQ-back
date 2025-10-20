@@ -25,7 +25,7 @@ router.get("/rfq", async (req, res) => {
         m.quotation_expected_date,
         m.target_price_eur,
         -- Calculate TO total
-        (m.target_price_eur * m.annual_volume * COALESCE(m.sop_year,1))::numeric(15,2) AS to_total,
+        ((m.target_price_eur * m.annual_volume * COALESCE(m.sop_year, 1)) / 1000)::numeric(15,2) AS to_total,
         m.delivery_conditions,
         m.payment_terms,
         m.business_trigger,
