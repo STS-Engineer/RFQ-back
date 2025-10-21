@@ -77,11 +77,10 @@ router.get("/rfq", async (req, res) => {
         p.data->'rfq_payload'->>'rfq_reception_date' AS rfq_reception_date,
         p.data->'rfq_payload'->>'quotation_expected_date' AS quotation_expected_date,
         (p.data->'rfq_payload'->>'target_price_eur')::numeric AS target_price_eur,
-        -- Calculate TO total for pending
-        ((p.data->'rfq_payload'->>'target_price_eur')::numeric
-          * (p.data->'rfq_payload'->>'annual_volume')::int
-          * COALESCE((p.data->'rfq_payload'->>'sop_year')::int, 1)
-        )::numeric(15,2) AS to_total,
+         -- Calculate TO total for pending
+         ((p.data->'rfq_payload'->>'target_price_eur')::numeric
+         * (p.data->'rfq_payload'->>'annual_volume')::int
+          )::numeric(15,2) AS to_total,
         p.data->'rfq_payload'->>'delivery_conditions' AS delivery_conditions,
         p.data->'rfq_payload'->>'payment_terms' AS payment_terms,
         p.data->'rfq_payload'->>'business_trigger' AS business_trigger,
