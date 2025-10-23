@@ -7,6 +7,8 @@ const rfqrouter = require('./services/rfqservice');
 
 const app = express();
 
+app.use('/uploads', express.static('uploads'));
+
 // Allow frontend domain
 app.use(cors({
   origin: 'https://rfq-management.azurewebsites.net',
