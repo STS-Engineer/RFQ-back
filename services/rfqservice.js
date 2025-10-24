@@ -8,7 +8,7 @@ const router = express.Router();
 // Get all RFQ info (joined with context)
 router.get("/rfq", async (req, res) => {
   try {
-    // Fetch confirmed and declined RFQs from main table
+    // ✅ Fetch CONFIRM and DECLINE RFQs
     const mainQuery = `
       SELECT 
         m.rfq_id,
@@ -24,8 +24,7 @@ router.get("/rfq", async (req, res) => {
         m.rfq_reception_date,
         m.quotation_expected_date,
         m.target_price_eur,
-        -- Calculate TO total
-        (m.target_price_eur * m.annual_volume )::numeric(15,2) AS to_total,
+        (m.target_price_eur * m.annual_volume)::numeric(15,2) AS to_total,
         m.delivery_conditions,
         m.payment_terms,
         m.business_trigger,
@@ -46,6 +45,7 @@ router.get("/rfq", async (req, res) => {
         m.final_recommendation,
         m.validator_comments,
         m.status,
+        m.rfq_file_path,               -- ✅ Added file path
         m.created_at AS rfq_created_at,
         m.created_by_email,
         m.validated_by_email,
@@ -61,7 +61,7 @@ router.get("/rfq", async (req, res) => {
     `;
     const mainResult = await pool.query(mainQuery);
 
-    // Fetch pending RFQs from pending_validations table
+    // ✅ Fetch PENDING RFQs
     const pendingQuery = `
       SELECT 
         p.request_id AS rfq_id,
@@ -77,10 +77,7 @@ router.get("/rfq", async (req, res) => {
         p.data->'rfq_payload'->>'rfq_reception_date' AS rfq_reception_date,
         p.data->'rfq_payload'->>'quotation_expected_date' AS quotation_expected_date,
         (p.data->'rfq_payload'->>'target_price_eur')::numeric AS target_price_eur,
-         -- Calculate TO total for pending
-         ((p.data->'rfq_payload'->>'target_price_eur')::numeric
-         * (p.data->'rfq_payload'->>'annual_volume')::int
-          )::numeric(15,2) AS to_total,
+        ((p.data->'rfq_payload'->>'target_price_eur')::numeric * (p.data->'rfq_payload'->>'annual_volume')::int)::numeric(15,2) AS to_total,
         p.data->'rfq_payload'->>'delivery_conditions' AS delivery_conditions,
         p.data->'rfq_payload'->>'payment_terms' AS payment_terms,
         p.data->'rfq_payload'->>'business_trigger' AS business_trigger,
@@ -100,6 +97,7 @@ router.get("/rfq", async (req, res) => {
         p.data->'rfq_payload'->>'strategic_note' AS strategic_note,
         p.data->'rfq_payload'->>'final_recommendation' AS final_recommendation,
         p.data->'rfq_payload'->>'validator_comments' AS validator_comments,
+        p.data->'rfq_payload'->>'rfq_file_path' AS rfq_file_path,  -- ✅ Added file path from JSON payload
         'PENDING' AS status,
         p.created_at AS rfq_created_at,
         p.data->>'user_email' AS created_by_email,
@@ -115,24 +113,19 @@ router.get("/rfq", async (req, res) => {
     `;
     const pendingResult = await pool.query(pendingQuery);
 
-    // Process pending results
+    // ✅ Process pending rows
     const processedPending = pendingResult.rows.map(row => {
       const processedRow = { ...row };
 
       // Convert string booleans to actual booleans
-      if (row.scope_alignment !== undefined && row.scope_alignment !== null) {
-        processedRow.scope_alignment = String(row.scope_alignment).toLowerCase() === 'true';
-      }
-
-      if (row.technical_capacity !== undefined && row.technical_capacity !== null) {
-        processedRow.technical_capacity = String(row.technical_capacity).toLowerCase() === 'true';
-      }
+      if (row.scope_alignment != null) processedRow.scope_alignment = String(row.scope_alignment).toLowerCase() === 'true';
+      if (row.technical_capacity != null) processedRow.technical_capacity = String(row.technical_capacity).toLowerCase() === 'true';
 
       // Ensure numeric fields
       processedRow.annual_volume = parseInt(row.annual_volume) || 0;
       processedRow.sop_year = parseInt(row.sop_year) || 0;
       processedRow.target_price_eur = parseFloat(row.target_price_eur) || 0;
-      processedRow.to_total = parseFloat(row.to_total) || (processedRow.target_price_eur * processedRow.annual_volume * (processedRow.sop_year || 1));
+      processedRow.to_total = parseFloat(row.to_total) || (processedRow.target_price_eur * processedRow.annual_volume);
 
       // Handle null/undefined values
       processedRow.risks = row.risks || 'N/A';
@@ -145,10 +138,15 @@ router.get("/rfq", async (req, res) => {
       processedRow.final_recommendation = row.final_recommendation || 'N/A';
       processedRow.development_costs = row.development_costs || 'N/A';
 
+      // ✅ Ensure file path has correct base URL
+      if (row.rfq_file_path && !row.rfq_file_path.startsWith('http')) {
+        processedRow.rfq_file_path = `https://rfq-back.azurewebsites.net/uploads/${row.rfq_file_path}`;
+      }
+
       return processedRow;
     });
 
-    // Group RFQs by status
+    // ✅ Group RFQs by status
     const groupedRfqs = {
       PENDING: processedPending,
       CONFIRM: mainResult.rows.filter(r => r.status === 'CONFIRM'),
