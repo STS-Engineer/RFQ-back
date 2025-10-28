@@ -140,7 +140,7 @@ router.get("/rfq", async (req, res) => {
 
       // ✅ Ensure file path has correct base URL
       if (row.rfq_file_path && !row.rfq_file_path.startsWith('http')) {
-        processedRow.rfq_file_path = `https://rfq-back.azurewebsites.net/uploads/${row.rfq_file_path}`;
+        processedRow.rfq_file_path = `https://rfq-back.azurewebsites.net/${row.rfq_file_path}`;
       }
 
       return processedRow;
