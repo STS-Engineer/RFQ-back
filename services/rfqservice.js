@@ -97,7 +97,7 @@ router.get("/rfq", async (req, res) => {
         p.data->'rfq_payload'->>'strategic_note' AS strategic_note,
         p.data->'rfq_payload'->>'final_recommendation' AS final_recommendation,
         p.data->'rfq_payload'->>'validator_comments' AS validator_comments,
-        p.data->'rfq_payload'->>'rfq_file_path' AS rfq_file_path,  -- ✅ Added file path from JSON payload
+        p.data->>'rfq_file_path' AS rfq_file_path,
         'PENDING' AS status,
         p.created_at AS rfq_created_at,
         p.data->>'user_email' AS created_by_email,
