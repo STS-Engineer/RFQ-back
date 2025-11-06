@@ -8,7 +8,7 @@ const router = express.Router();
 // Get all RFQ info (joined with context)
 router.get("/rfq", async (req, res) => {
   try {
-    // ✅ Fetch CONFIRM and DECLINE RFQs
+    // ✅ Fetch CONFIRM and DECLINE RFQs   
     const mainQuery = `
       SELECT 
         m.rfq_id,
