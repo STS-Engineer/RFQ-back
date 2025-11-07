@@ -1,14 +1,133 @@
+// routes/rfq.ts
 const express = require('express');
 const pool = require('../db');
-
+const nodemailer = require('nodemailer');
 const router = express.Router();
+const multer = require("multer");
+const fs = require("fs");
+const path = require("path");
+
+const storage = multer.diskStorage({
+  destination: (req, file, cb) => {
+    cb(null, "uploads/"); // store files in uploads folder
+  },
+  filename: (req, file, cb) => {
+    const uniqueSuffix = Date.now() + "-" + Math.round(Math.random() * 1e9);
+    cb(null, uniqueSuffix + path.extname(file.originalname)); // e.g. 1699478881000-123456789.pdf
+  },
+});
+
+const upload = multer({ storage });
+
+const transporter = nodemailer.createTransport({
+    host: "avocarbon-com.mail.protection.outlook.com",
+    port: 25,
+    secure: false,
+    auth: {
+      user: "administration.STS@avocarbon.com",
+      pass: "shnlgdyfbcztbhxn",
+    },
+});
 
 
+router.post("/rfq/:id/upload", upload.single("file"), async (req, res) => {
+  const { id } = req.params;
 
-// Get all RFQ info (joined with context)
+  if (!req.file) {
+    return res.status(400).json({ message: "No file uploaded" });
+  }
+
+  const filePath = `/uploads/${req.file.filename}`;
+
+  try {
+    const updateQuery = `
+      UPDATE public.main
+      SET costingfile = $1
+      WHERE rfq_id = $2
+      RETURNING *;
+    `;
+
+    const result = await pool.query(updateQuery, [filePath, id]);
+
+    if (result.rows.length === 0) {
+      return res.status(404).json({ message: "RFQ not found" });
+    }
+
+    res.status(200).json({
+      message: "Costing file uploaded and RFQ updated successfully",
+      rfq: result.rows[0],
+    });
+  } catch (error) {
+    console.error("Error updating costing file:", error);
+    res.status(500).json({
+      message: "Error updating costing file",
+      error: error.message,
+    });
+  }
+});
+
+router.post("/rfq/send-costing-email/:id", upload.single("file"), async (req, res) => {
+  const { id } = req.params; // ✅ Get RFQ ID from URL
+  const file = req.file;
+
+  if (!file) {
+    return res.status(400).json({ message: "No file uploaded." });
+  }
+
+  try {
+    // 🔍 1. Get requester email from DB
+    const result = await pool.query(
+      `SELECT created_by_email FROM public.main WHERE rfq_id = $1`,
+      [id] // ✅ Pass RFQ ID as query parameter
+    );
+
+    if (result.rows.length === 0) {
+      return res.status(404).json({ message: "RFQ not found." });
+    }
+
+    const requesterEmail = result.rows[0].created_by_email;
+
+    if (!requesterEmail) {
+      return res.status(400).json({ message: "Requester email missing." });
+    }
+
+    // 📨 2. Prepare and send email
+    const mailOptions = {
+      from: "administration.STS@avocarbon.com",
+      to: requesterEmail, // ✅ Send to requester from DB
+      subject: `Costing File Submission - RFQ #${id}`,
+      html: `
+        <h3>Dear Requester,</h3>
+        <p>Please find attached the costing file related to your RFQ #${id}.</p>
+        <p>Best regards,<br>RFQ Management Team</p>
+      `,
+      attachments: [
+        {
+          filename: file.originalname,
+          path: file.path,
+        },
+      ],
+    };
+
+    await transporter.sendMail(mailOptions);
+
+    // ✅ Remove file from temp folder after sending
+    fs.unlinkSync(file.path);
+
+    console.log(`✅ Costing email sent to ${requesterEmail}`);
+    res.json({ success: true, message: "Costing email sent successfully." });
+  } catch (error) {
+    console.error("❌ Error sending costing email:", error);
+    res
+      .status(500)
+      .json({ message: "Error sending costing email.", error: error.message });
+  }
+});
+
+
 router.get("/rfq", async (req, res) => {
   try {
-    // ✅ Fetch CONFIRM and DECLINE RFQs   
+    // ✅ Fetch CONFIRM and DECLINE RFQs
     const mainQuery = `
       SELECT 
         m.rfq_id,
@@ -46,10 +165,10 @@ router.get("/rfq", async (req, res) => {
         m.validator_comments,
         m.status,
         m.rfq_file_path,               -- ✅ Added file path
+         m.costingfile, 
         m.created_at AS rfq_created_at,
         m.created_by_email,
         m.validated_by_email,
-        m.requester_comment,
         c.contact_id,
         c.contact_role,
         c.contact_email,
@@ -98,7 +217,7 @@ router.get("/rfq", async (req, res) => {
         p.data->'rfq_payload'->>'strategic_note' AS strategic_note,
         p.data->'rfq_payload'->>'final_recommendation' AS final_recommendation,
         p.data->'rfq_payload'->>'validator_comments' AS validator_comments,
-        p.data->>'rfq_file_path' AS rfq_file_path,
+        p.data->>'rfq_file_path' AS rfq_file_path,  -- ✅ Added file path from JSON payload
         'PENDING' AS status,
         p.created_at AS rfq_created_at,
         p.data->>'user_email' AS created_by_email,
@@ -163,6 +282,84 @@ router.get("/rfq", async (req, res) => {
     });
   }
 });
+async function sendConfirmEmail(rfq) {
+  const rfqDetailsUrl = `https://rfq-management.azurewebsites.net/`;
+
+  const mailOptions = {
+    from: "administration.STS@avocarbon.com",
+    to: "mootaz.farwa@avocarbon.com",
+    subject: `RFQ #${rfq.rfq_id} Confirmed`,
+    html: `
+      <h2>RFQ Confirmed</h2>
+      <p>The following RFQ has been confirmed:</p>
+      <ul>
+        <li><strong>RFQ ID:</strong> ${rfq.rfq_id}</li>
+        <li><strong>Requester:</strong> ${rfq.created_by_email}</li>
+        <li><strong>Validator:</strong> ${rfq.validated_by_email}</li> 
+        <li><strong>Customer:</strong> ${rfq.customer_name}</li>
+        <li><strong>Product Line:</strong> ${rfq.product_line}</li>
+        <li><strong>Customer PN:</strong> ${rfq.customer_pn}</li>
+        <li><strong>Application:</strong> ${rfq.application}</li>
+        <li><strong>Annual Volume:</strong> ${rfq.annual_volume}</li>
+        <li><strong>Target Price (€):</strong> ${rfq.target_price_eur}</li>
+        <li><strong>TO Total (k€):</strong> ${rfq.to_total}</li>
+        <li><strong>Market:</strong> ${rfq.delivery_zone}</li>
+      </ul>
+
+      <p>You can view full RFQ details and add costing information at the following link:</p>
+      <a href="${rfqDetailsUrl}" target="_blank"
+         style="display:inline-block;padding:10px 15px;background:#0078d4;color:white;text-decoration:none;border-radius:5px;">
+         View RFQ Details
+      </a>
+
+      <br><br>
+      <p>Best regards,<br>RFQ Management System</p>
+    `
+  };
+
+  try {
+    await transporter.sendMail(mailOptions);
+    console.log(`✅ Confirmation email sent for RFQ #${rfq.rfq_id}`);
+  } catch (err) {
+    console.error(`❌ Failed to send confirmation email for RFQ #${rfq.rfq_id}:`, err);
+  }
+}
+
+router.put("/rfq/:id/status", async (req, res) => {
+  const { id } = req.params;
+  const { status } = req.body;
+
+  try {
+    // ✅ Update status in the database
+    const updateQuery = `
+      UPDATE public.main
+      SET status = $1
+      WHERE rfq_id = $2
+      RETURNING *;
+    `;
+    const result = await pool.query(updateQuery, [status, id]);
+
+    if (result.rows.length === 0) {
+      return res.status(404).json({ message: "RFQ not found" });
+    }
+
+    const updatedRfq = result.rows[0];
+
+    // ✅ When status becomes CONFIRM, send email
+    if (status === "CONFIRM") {
+      await sendConfirmEmail(updatedRfq);
+    }
+
+    res.status(200).json({
+      message: `RFQ status updated to ${status}`,
+      rfq: updatedRfq
+    });
+  } catch (error) {
+    console.error("Error updating RFQ status:", error);
+    res.status(500).json({ message: "Error updating RFQ status", error: error.message });
+  }
+});
 
 
-module.exports=  router;
+
+module.exports = router;
