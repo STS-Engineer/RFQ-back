@@ -101,10 +101,10 @@ router.post("/rfq/send-costing-email/:id", upload.single("file"), async (req, re
     
     switch (productLine) {
       case "Chokes":
-        recipientEmail = "mohamedlaith.benmabrouk@avocarbon.com";
+        recipientEmail = "mootaz.farwa@avocarbon.com";
         break;
       case "Assembly":
-        recipientEmail = "chaima.benyahia@avocarbon.com";
+        recipientEmail = "mootaz.farwa@avocarbon.com";
         break;
       case "Brushes":
         recipientEmail = "chaima.benyahia@avocarbon.com";
@@ -119,10 +119,10 @@ router.post("/rfq/send-costing-email/:id", upload.single("file"), async (req, re
       to: recipientEmail,
       subject: `Costing File Submission - RFQ #${id}`,
       html: `
-        <h3>Dear ${recipientEmail},</h3>
+        <h3>Dear Requester,</h3>
         <p>Please find attached the costing file related to your RFQ #${id}.</p>
         <p><strong>Product Line:</strong> ${productLine}</p>
-        <p>Best regards</p>
+        <p>Best regards,<br>RFQ Management Team</p>
       `,
       attachments: [
         {
@@ -132,23 +132,29 @@ router.post("/rfq/send-costing-email/:id", upload.single("file"), async (req, re
       ],
     };
 
+    // ✅ Use async/await properly without callback
     await transporter.sendMail(mailOptions);
 
     // ✅ Remove file from temp folder after sending
-    fs.unlinkSync(file.path);
+    if (fs.existsSync(file.path)) {
+      fs.unlinkSync(file.path);
+    }
 
-    console.log(`✅ Costing email sent to ${recipientEmail} for product line: ${productLine}`);
-    res.json({ 
-      success: true, 
-      message: "Costing email sent successfully.",
-      sentTo: recipientEmail,
-      productLine: productLine
-    });
+    console.log(`✅ Costing email sent to ${recipientEmail}`);
+    res.json({ success: true, message: "Costing email sent successfully." });
+
   } catch (error) {
     console.error("❌ Error sending costing email:", error);
-    res
-      .status(500)
-      .json({ message: "Error sending costing email.", error: error.message });
+    
+    // ✅ Clean up file on error
+    if (file && fs.existsSync(file.path)) {
+      fs.unlinkSync(file.path);
+    }
+    
+    res.status(500).json({ 
+      message: "Error sending costing email.", 
+      error: error.message 
+    });
   }
 });
 
