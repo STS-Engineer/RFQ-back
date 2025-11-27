@@ -67,7 +67,7 @@ router.post("/rfq/:id/upload", upload.single("file"), async (req, res) => {
 });
 
 router.post("/rfq/send-costing-email/:id", upload.single("file"), async (req, res) => {
-  const { id } = req.params; // ✅ Get RFQ ID from URL
+  const { id } = req.params;
   const file = req.file;
 
   if (!file) {
@@ -75,10 +75,10 @@ router.post("/rfq/send-costing-email/:id", upload.single("file"), async (req, re
   }
 
   try {
-    // 🔍 1. Get requester email from DB
+    // 🔍 1. Get requester email and product_line from DB
     const result = await pool.query(
-      `SELECT created_by_email FROM public.main WHERE rfq_id = $1`,
-      [id] // ✅ Pass RFQ ID as query parameter
+      `SELECT created_by_email, product_line FROM public.main WHERE rfq_id = $1`,
+      [id]
     );
 
     if (result.rows.length === 0) {
@@ -86,20 +86,43 @@ router.post("/rfq/send-costing-email/:id", upload.single("file"), async (req, re
     }
 
     const requesterEmail = result.rows[0].created_by_email;
+    const productLine = result.rows[0].product_line;
 
     if (!requesterEmail) {
       return res.status(400).json({ message: "Requester email missing." });
     }
 
-    // 📨 2. Prepare and send email
+    if (!productLine) {
+      return res.status(400).json({ message: "Product line missing." });
+    }
+
+    // 🎯 2. Determine recipient email based on product_line
+    let recipientEmail;
+    
+    switch (productLine) {
+      case "Chokes":
+        recipientEmail = "mohamedlaith.benmabrouk@avocarbon.com";
+        break;
+      case "Assembly":
+        recipientEmail = "chaima.benyahia@avocarbon.com";
+        break;
+      case "Brushes":
+        recipientEmail = "chaima.benyahia@avocarbon.com";
+        break;
+      default:
+        console.log(`ℹ️ No specific product line match for "${productLine}", sending to requester: ${requesterEmail}`);
+    }
+
+    // 📨 3. Prepare and send email
     const mailOptions = {
       from: "administration.STS@avocarbon.com",
-      to: requesterEmail, // ✅ Send to requester from DB
+      to: recipientEmail,
       subject: `Costing File Submission - RFQ #${id}`,
       html: `
-        <h3>Dear Requester,</h3>
+        <h3>Dear ${recipientEmail},</h3>
         <p>Please find attached the costing file related to your RFQ #${id}.</p>
-        <p>Best regards,<br>RFQ Management Team</p>
+        <p><strong>Product Line:</strong> ${productLine}</p>
+        <p>Best regards</p>
       `,
       attachments: [
         {
@@ -114,8 +137,13 @@ router.post("/rfq/send-costing-email/:id", upload.single("file"), async (req, re
     // ✅ Remove file from temp folder after sending
     fs.unlinkSync(file.path);
 
-    console.log(`✅ Costing email sent to ${requesterEmail}`);
-    res.json({ success: true, message: "Costing email sent successfully." });
+    console.log(`✅ Costing email sent to ${recipientEmail} for product line: ${productLine}`);
+    res.json({ 
+      success: true, 
+      message: "Costing email sent successfully.",
+      sentTo: recipientEmail,
+      productLine: productLine
+    });
   } catch (error) {
     console.error("❌ Error sending costing email:", error);
     res
@@ -164,8 +192,8 @@ router.get("/rfq", async (req, res) => {
         m.final_recommendation,
         m.validator_comments,
         m.status,
-        m.rfq_file_path,               -- ✅ Added file path
-         m.costingfile, 
+        m.rfq_file_path,
+        m.costingfile, 
         m.created_at AS rfq_created_at,
         m.created_by_email,
         m.validated_by_email,
@@ -217,7 +245,7 @@ router.get("/rfq", async (req, res) => {
         p.data->'rfq_payload'->>'strategic_note' AS strategic_note,
         p.data->'rfq_payload'->>'final_recommendation' AS final_recommendation,
         p.data->'rfq_payload'->>'validator_comments' AS validator_comments,
-        p.data->>'rfq_file_path' AS rfq_file_path,  -- ✅ Added file path from JSON payload
+        p.data->>'rfq_file_path' AS rfq_file_path,
         'PENDING' AS status,
         p.created_at AS rfq_created_at,
         p.data->>'user_email' AS created_by_email,
@@ -233,6 +261,38 @@ router.get("/rfq", async (req, res) => {
     `;
     const pendingResult = await pool.query(pendingQuery);
 
+    // Function to format number divided by 1000 as "834 k€" or "1 250 k€"
+  const formatToKEuro = (number) => {
+  if (!number) return '0 k€';
+  
+  // Divide by 1000 and keep decimal places
+  const divided = number / 1000;
+  
+  // Check if the number ends with 000 (no decimal places needed)
+  if (number % 1000 === 0) {
+    // Format with spaces as thousands separators (no decimals)
+    return Math.round(divided).toString().replace(/\B(?=(\d{3})+(?!\d))/g, ' ') + ' k€';
+  } else {
+    // Show with 3 decimal places and comma as decimal separator
+    return divided.toFixed(3).replace('.', ',').replace(/\B(?=(\d{3})+(?!\d))/g, ' ') + ' k€';
+  }
+};
+
+    // ✅ Process main rows (CONFIRM and DECLINE)
+// ✅ Process main rows (CONFIRM and DECLINE)
+const processedMain = mainResult.rows.map(row => {
+  const processedRow = { ...row };
+  
+  // Replace to_total with formatted version divided by 1000
+  if (processedRow.to_total) {
+    processedRow.to_total = formatToKEuro(processedRow.to_total);
+  } else {
+    processedRow.to_total = '0 k€';
+  }
+  
+  return processedRow;
+});
+
     // ✅ Process pending rows
     const processedPending = pendingResult.rows.map(row => {
       const processedRow = { ...row };
@@ -245,7 +305,10 @@ router.get("/rfq", async (req, res) => {
       processedRow.annual_volume = parseInt(row.annual_volume) || 0;
       processedRow.sop_year = parseInt(row.sop_year) || 0;
       processedRow.target_price_eur = parseFloat(row.target_price_eur) || 0;
-      processedRow.to_total = parseFloat(row.to_total) || (processedRow.target_price_eur * processedRow.annual_volume);
+      
+      // Calculate to_total and format divided by 1000 as "834 k€"
+      const calculatedTotal = parseFloat(row.to_total) || (processedRow.target_price_eur * processedRow.annual_volume);
+      processedRow.to_total = formatToKEuro(calculatedTotal);
 
       // Handle null/undefined values
       processedRow.risks = row.risks || 'N/A';
@@ -269,8 +332,8 @@ router.get("/rfq", async (req, res) => {
     // ✅ Group RFQs by status
     const groupedRfqs = {
       PENDING: processedPending,
-      CONFIRM: mainResult.rows.filter(r => r.status === 'CONFIRM'),
-      DECLINE: mainResult.rows.filter(r => r.status === 'DECLINE')
+      CONFIRM: processedMain.filter(r => r.status === 'CONFIRM'),
+      DECLINE: processedMain.filter(r => r.status === 'DECLINE')
     };
 
     res.status(200).json(groupedRfqs);
