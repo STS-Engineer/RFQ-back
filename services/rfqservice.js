@@ -429,6 +429,83 @@ router.put("/rfq/:id/status", async (req, res) => {
   }
 });
 
-
+//costing details endpoint 
+// routes/costing.js - Enhanced version
+router.get('/costing-details/:rfqId', async (req, res) => {
+    try {
+        const { rfqId } = req.params;
+        
+        // Get costed product with component details
+        const costedProductQuery = `
+            SELECT cp.*, c.*
+            FROM costed_products cp
+            LEFT JOIN components c ON c.component_id = cp.component_id
+            WHERE cp.rfq_id = $1
+        `;
+        
+        const costedProductResult = await pool.query(costedProductQuery, [rfqId]);
+        
+        if (costedProductResult.rows.length === 0) {
+            return res.status(404).json({ 
+                success: false, 
+                message: 'No costing data found for this RFQ' 
+            });
+        }
+        
+        // Get BOM parameters
+        const bomQuery = `
+            SELECT * FROM bom_parameters 
+            WHERE costed_product_id = $1
+            ORDER BY bom_product
+        `;
+        
+        // Get Routing parameters
+        const routingQuery = `
+            SELECT * FROM routing_parameters 
+            WHERE costed_product_id = $1
+            ORDER BY router_operation_no
+        `;
+        
+        const costedProductId = costedProductResult.rows[0].id;
+        
+        const [bomResult, routingResult] = await Promise.all([
+            pool.query(bomQuery, [costedProductId]),
+            pool.query(routingQuery, [costedProductId])
+        ]);
+        
+        // Calculate some summary metrics
+        const totalBOMCost = bomResult.rows.reduce((sum, item) => 
+            sum + (item.bom_landedcost || 0), 0
+        );
+        
+        const totalRoutingCost = routingResult.rows.reduce((sum, item) => 
+            sum + (item.router_genericcapex || 0) + (item.router_specificcapex || 0), 0
+        );
+        
+        res.json({
+            success: true,
+            data: {
+                costedProduct: costedProductResult.rows[0],
+                bomParameters: bomResult.rows,
+                routingParameters: routingResult.rows,
+                summary: {
+                    totalBOMItems: bomResult.rows.length,
+                    totalRoutingOperations: routingResult.rows.length,
+                    totalBOMCost,
+                    totalRoutingCost,
+                    grandTotal: totalBOMCost + totalRoutingCost
+                }
+            }
+        });
+        
+    } catch (error) {
+        console.error('Error fetching costing details:', error);
+        res.status(500).json({ 
+            success: false, 
+            message: 'Error fetching costing details',
+            error: error.message 
+        });
+    }
+});
 
 module.exports = router;
