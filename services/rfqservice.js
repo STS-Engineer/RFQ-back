@@ -20,13 +20,13 @@ const storage = multer.diskStorage({
 const upload = multer({ storage });
 
 const transporter = nodemailer.createTransport({
-    host: "avocarbon-com.mail.protection.outlook.com",
-    port: 25,
-    secure: false,
-    auth: {
-      user: "administration.STS@avocarbon.com",
-      pass: "shnlgdyfbcztbhxn",
-    },
+  host: "avocarbon-com.mail.protection.outlook.com",
+  port: 25,
+  secure: false,
+  auth: {
+    user: "administration.STS@avocarbon.com",
+    pass: "shnlgdyfbcztbhxn",
+  },
 });
 
 
@@ -40,27 +40,77 @@ router.post("/rfq/:id/upload", upload.single("file"), async (req, res) => {
   const filePath = `/uploads/${req.file.filename}`;
 
   try {
+    // 1) Update costing file in DB
     const updateQuery = `
       UPDATE public.main
-      SET costingfile = $1
+      SET costingfile = $1,
+          updated_at = NOW()
       WHERE rfq_id = $2
       RETURNING *;
     `;
 
-    const result = await pool.query(updateQuery, [filePath, id]);
+    const updateResult = await pool.query(updateQuery, [filePath, id]);
 
-    if (result.rows.length === 0) {
+    if (updateResult.rows.length === 0) {
       return res.status(404).json({ message: "RFQ not found" });
     }
 
+    const rfq = updateResult.rows[0];
+    const productLine = rfq.product_line;
+
+    // 2) Decide responsible email based on product_line
+    let recipientEmail = null;
+
+    switch (productLine) {
+      case "Brushes":
+        recipientEmail = "mootaz.farwa@avocarbon.com";
+        break;
+
+      case "Seals":
+        recipientEmail = "mootaz.farwa@avocarbon.com";
+        break;
+
+      default:
+        console.log(`No responsible email configured for product line: ${productLine}`);
+        break;
+    }
+
+    // 3) Send email only if a recipient exists
+    if (recipientEmail) {
+  
+      const mailOptions = {
+        from: "administration.STS@avocarbon.com",
+        to: recipientEmail,
+        subject: `New Costing File Submitted - RFQ #${rfq.rfq_id}`,
+        html: `
+          <h3>New costing file submitted</h3>
+          <p>A new costing file has been uploaded for the following RFQ:</p>
+
+          <ul>
+            <li><strong>RFQ ID:</strong> ${rfq.rfq_id}</li>
+            <li><strong>Customer Name:</strong> ${rfq.customer_name || "N/A"}</li>
+            <li><strong>Product Line:</strong> ${rfq.product_line || "N/A"}</li>
+            <li><strong>Customer PN:</strong> ${rfq.customer_pn || "N/A"}</li>
+            <li><strong>Uploaded By:</strong> ${rfq.updated_by || "System"}</li>
+          </ul>
+
+          <br />
+          <p>Best regards,<br />RFQ Management System</p>
+        `,
+      };
+
+      await transporter.sendMail(mailOptions);
+      console.log(`Costing submission email sent to ${recipientEmail}`);
+    }
+
     res.status(200).json({
-      message: "Costing file uploaded and RFQ updated successfully",
-      rfq: result.rows[0],
+      message: "Costing file uploaded successfully",
+      rfq: updateResult.rows[0],
     });
   } catch (error) {
-    console.error("Error updating costing file:", error);
+    console.error("Error uploading costing file:", error);
     res.status(500).json({
-      message: "Error updating costing file",
+      message: "Error uploading costing file",
       error: error.message,
     });
   }
@@ -98,7 +148,7 @@ router.post("/rfq/send-costing-email/:id", upload.single("file"), async (req, re
 
     // 🎯 2. Determine recipient email based on product_line
     let recipientEmail;
-    
+
     switch (productLine) {
       case "Chokes":
         recipientEmail = "mootaz.farwa@avocarbon.com";
@@ -145,15 +195,15 @@ router.post("/rfq/send-costing-email/:id", upload.single("file"), async (req, re
 
   } catch (error) {
     console.error("❌ Error sending costing email:", error);
-    
+
     // ✅ Clean up file on error
     if (file && fs.existsSync(file.path)) {
       fs.unlinkSync(file.path);
     }
-    
-    res.status(500).json({ 
-      message: "Error sending costing email.", 
-      error: error.message 
+
+    res.status(500).json({
+      message: "Error sending costing email.",
+      error: error.message
     });
   }
 });
@@ -206,44 +256,52 @@ router.get("/rfq", async (req, res) => {
       if (!arrayString || typeof arrayString !== 'string') {
         return [];
       }
-      
+
       // Remove surrounding braces and split
       const cleanString = arrayString.replace(/^{|}$/g, '');
       if (!cleanString) return [];
-      
+
       // Split by comma, but handle empty entries
       return cleanString.split(',').map(item => item.trim()).filter(item => item);
     };
 
     // 5️⃣ Process main RFQs
     const processedMain = mainResult.rows.map(row => {
-      // Parse the rfq_file_path if it's in array format
       let filePaths = [];
-      
+
       if (row.rfq_file_path && typeof row.rfq_file_path === 'string') {
-        // Check if it's a PostgreSQL array format
         if (row.rfq_file_path.startsWith('{') && row.rfq_file_path.endsWith('}')) {
           filePaths = parsePostgresArray(row.rfq_file_path);
         } else {
-          // It's a single path
           filePaths = [row.rfq_file_path];
         }
       } else if (Array.isArray(row.rfq_file_path)) {
-        // Already an array
         filePaths = row.rfq_file_path;
       }
-      
-      // Convert paths to full URLs
+
       const processedFilePaths = filePaths.map(f => {
-        // Remove leading slash if present for proper static file serving
         const cleanPath = f.startsWith('/') ? f.substring(1) : f;
-        return cleanPath.startsWith('http') ? cleanPath : `https://rfq-back.azurewebsites.net/${cleanPath}`;
+        return cleanPath.startsWith('http')
+          ? cleanPath
+          : `https://rfq-back.azurewebsites.net/${cleanPath}`;
       });
+
+      let processedCostingFile = null;
+      if (row.costingfile) {
+        const cleanCostingPath = row.costingfile.startsWith('/')
+          ? row.costingfile.substring(1)
+          : row.costingfile;
+
+        processedCostingFile = cleanCostingPath.startsWith('http')
+          ? cleanCostingPath
+          : `https://rfq-back.azurewebsites.net/${cleanCostingPath}`;
+      }
 
       return {
         ...row,
         to_total: formatToKEuro(Number(row.to_total)),
-        rfq_file_path: processedFilePaths.length > 0 ? processedFilePaths : null
+        rfq_file_path: processedFilePaths.length > 0 ? processedFilePaths : null,
+        costingfile: processedCostingFile
       };
     });
 
@@ -252,7 +310,7 @@ router.get("/rfq", async (req, res) => {
       const p = row.rfq_payload;
       const annual_volume = parseInt(p?.annual_volume) || 0;
       const target_price_eur = parseFloat(p?.target_price_eur) || 0;
-      
+
       // Parse file paths for pending RFQs too
       let pendingFilePaths = [];
       if (p?.rfq_file_path && typeof p.rfq_file_path === 'string') {
@@ -264,7 +322,7 @@ router.get("/rfq", async (req, res) => {
       } else if (Array.isArray(p?.rfq_file_path)) {
         pendingFilePaths = p.rfq_file_path;
       }
-      
+
       // Convert paths to full URLs
       const processedPendingPaths = pendingFilePaths.map(f => {
         const cleanPath = f.startsWith('/') ? f.substring(1) : f;
@@ -326,6 +384,7 @@ router.get("/rfq", async (req, res) => {
     res.status(500).json({ message: "Server error fetching grouped RFQs", error: err.message });
   }
 });
+
 async function sendConfirmEmail(rfq) {
   const rfqDetailsUrl = `https://rfq-management.azurewebsites.net/`;
 
@@ -407,80 +466,81 @@ router.put("/rfq/:id/status", async (req, res) => {
 //costing details endpoint 
 // routes/costing.js - Enhanced version
 router.get('/costing-details/:rfqId', async (req, res) => {
-    try {
-        const { rfqId } = req.params;
-        
-        // Get costed product with component details
-        const costedProductQuery = `
+  try {
+    const { rfqId } = req.params;
+
+    // Get costed product with component details
+    const costedProductQuery = `
             SELECT cp.*, c.*
             FROM costed_products cp
             LEFT JOIN components c ON c.component_id = cp.component_id
             WHERE cp.rfq_id = $1
         `;
-        
-        const costedProductResult = await pool.query(costedProductQuery, [rfqId]);
-        
-        if (costedProductResult.rows.length === 0) {
-            return res.status(404).json({ 
-                success: false, 
-                message: 'No costing data found for this RFQ' 
-            });
-        }
-        
-        // Get BOM parameters
-        const bomQuery = `
+
+    const costedProductResult = await pool.query(costedProductQuery, [rfqId]);
+
+    if (costedProductResult.rows.length === 0) {
+      return res.status(404).json({
+        success: false,
+        message: 'No costing data found for this RFQ'
+      });
+    }
+
+    // Get BOM parameters
+    const bomQuery = `
             SELECT * FROM bom_parameters 
             WHERE costed_product_id = $1
             ORDER BY bom_product
         `;
-        
-        // Get Routing parameters
-        const routingQuery = `
+
+    // Get Routing parameters
+    const routingQuery = `
             SELECT * FROM routing_parameters 
             WHERE costed_product_id = $1
             ORDER BY router_operation_no
         `;
-        
-        const costedProductId = costedProductResult.rows[0].id;
-        
-        const [bomResult, routingResult] = await Promise.all([
-            pool.query(bomQuery, [costedProductId]),
-            pool.query(routingQuery, [costedProductId])
-        ]);
-        
-        // Calculate some summary metrics
-        const totalBOMCost = bomResult.rows.reduce((sum, item) => 
-            sum + (item.bom_landedcost || 0), 0
-        );
-        
-        const totalRoutingCost = routingResult.rows.reduce((sum, item) => 
-            sum + (item.router_genericcapex || 0) + (item.router_specificcapex || 0), 0
-        );
-        
-        res.json({
-            success: true,
-            data: {
-                costedProduct: costedProductResult.rows[0],
-                bomParameters: bomResult.rows,
-                routingParameters: routingResult.rows,
-                summary: {
-                    totalBOMItems: bomResult.rows.length,
-                    totalRoutingOperations: routingResult.rows.length,
-                    totalBOMCost,
-                    totalRoutingCost,
-                    grandTotal: totalBOMCost + totalRoutingCost
-                }
-            }
-        });
-        
-    } catch (error) {
-        console.error('Error fetching costing details:', error);
-        res.status(500).json({ 
-            success: false, 
-            message: 'Error fetching costing details',
-            error: error.message 
-        });
-    }
+
+    const costedProductId = costedProductResult.rows[0].id;
+
+    const [bomResult, routingResult] = await Promise.all([
+      pool.query(bomQuery, [costedProductId]),
+      pool.query(routingQuery, [costedProductId])
+    ]);
+
+    // Calculate some summary metrics
+    const totalBOMCost = bomResult.rows.reduce((sum, item) =>
+      sum + (item.bom_landedcost || 0), 0
+    );
+
+    const totalRoutingCost = routingResult.rows.reduce((sum, item) =>
+      sum + (item.router_genericcapex || 0) + (item.router_specificcapex || 0), 0
+    );
+
+    res.json({
+      success: true,
+      data: {
+        costedProduct: costedProductResult.rows[0],
+        bomParameters: bomResult.rows,
+        routingParameters: routingResult.rows,
+        summary: {
+          totalBOMItems: bomResult.rows.length,
+          totalRoutingOperations: routingResult.rows.length,
+          totalBOMCost,
+          totalRoutingCost,
+          grandTotal: totalBOMCost + totalRoutingCost
+        }
+      }
+    });
+
+  } catch (error) {
+    console.error('Error fetching costing details:', error);
+    res.status(500).json({
+      success: false,
+      message: 'Error fetching costing details',
+      error: error.message
+    });
+  }
 });
+
 
 module.exports = router;
