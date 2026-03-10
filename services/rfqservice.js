@@ -61,14 +61,20 @@ router.post("/rfq/:id/upload", upload.single("file"), async (req, res) => {
     // 2) Decide responsible email based on product_line
     let recipientEmail = null;
 
-    switch (productLine) {
+   switch (productLine) {
       case "Brushes":
-        recipientEmail = "mootaz.farwa@avocarbon.com";
+        recipientEmail = "cedric.bouvier@avocarbon.com";
         break;
 
-      case "Seals":
-        recipientEmail = "mootaz.farwa@avocarbon.com";
+
+      case "Chokes":
+        recipientEmail = "allan.riegel@avocarbon.com";
         break;
+
+
+      case "Assembly":
+        recipientEmail = "allan.riegel@avocarbon.com";
+        break;  
 
       default:
         console.log(`No responsible email configured for product line: ${productLine}`);
