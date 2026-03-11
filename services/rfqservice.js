@@ -29,7 +29,6 @@ const transporter = nodemailer.createTransport({
   },
 });
 
-
 router.post("/rfq/:id/upload", upload.single("file"), async (req, res) => {
   const { id } = req.params;
 
@@ -56,55 +55,233 @@ router.post("/rfq/:id/upload", upload.single("file"), async (req, res) => {
     }
 
     const rfq = updateResult.rows[0];
-    const productLine = rfq.product_line;
+    const recipientEmail = rfq.created_by_email;
 
-    // 2) Decide responsible email based on product_line
-    let recipientEmail = null;
-
-    switch (productLine) {
-      case "Brushes":
-        recipientEmail = "cedric.bouvier@avocarbon.com";
-        break;
-
-      case "Chokes":
-        recipientEmail = "allan.riegel@avocarbon.com";
-        break;
-
-      case "Assembly":
-        recipientEmail = "allan.riegel@avocarbon.com";
-        break;
-
-      default:
-        console.log(`No responsible email configured for product line: ${productLine}`);
-        break;
+    if (!recipientEmail) {
+      return res.status(400).json({ message: "Requester email missing." });
     }
 
-    // 3) Send email only if a recipient exists
-    if (recipientEmail) {
-      const mailOptions = {
-        from: "administration.STS@avocarbon.com",
-        to: recipientEmail,
-        subject: `New Costing File Submitted - RFQ #${rfq.rfq_id}`,
-        html: `
-          <h3>New costing file submitted</h3>
-          <p>A new costing file has been uploaded for the following RFQ:</p>
+    const appUrl = "https://rfq-management.azurewebsites.net/";
+    const uploadedAt = new Date().toLocaleString("en-GB", {
+      day: "2-digit",
+      month: "short",
+      year: "numeric",
+      hour: "2-digit",
+      minute: "2-digit",
+    });
 
-          <ul>
-            <li><strong>RFQ ID:</strong> ${rfq.rfq_id}</li>
-            <li><strong>Customer Name:</strong> ${rfq.customer_name || "N/A"}</li>
-            <li><strong>Product Line:</strong> ${rfq.product_line || "N/A"}</li>
-            <li><strong>Customer PN:</strong> ${rfq.customer_pn || "N/A"}</li>
-            <li><strong>Uploaded By:</strong> ${rfq.updated_by || "System"}</li>
-          </ul>
+    const mailOptions = {
+      from: "administration.STS@avocarbon.com",
+      to: recipientEmail,
+      subject: `📎 Costing File Submitted — RFQ #${rfq.rfq_id} | ${rfq.customer_name || "N/A"}`,
+      html: `
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8"/>
+  <meta name="viewport" content="width=device-width,initial-scale=1.0"/>
+  <title>Costing File Submitted</title>
+</head>
+<body style="margin:0;padding:0;background-color:#eef2f7;font-family:'Segoe UI',Helvetica,Arial,sans-serif;">
 
-          <br />
-          <p>Best regards,<br />RFQ Management System</p>
-        `,
-      };
+  <table width="100%" cellpadding="0" cellspacing="0" style="background:#eef2f7;padding:48px 16px;">
+    <tr>
+      <td align="center">
+        <table width="600" cellpadding="0" cellspacing="0"
+               style="background:#ffffff;border-radius:16px;overflow:hidden;box-shadow:0 8px 32px rgba(0,0,0,0.10);">
 
-      await transporter.sendMail(mailOptions);
-      console.log(`Costing submission email sent to ${recipientEmail}`);
-    }
+          <!-- Top accent -->
+          <tr>
+            <td style="height:5px;background:#0d6efd;"></td>
+          </tr>
+
+          <!-- Header -->
+          <tr>
+            <td style="background:#1a2e4a;padding:44px 48px 36px;text-align:center;">
+              <div style="display:inline-block;background:rgba(255,255,255,0.12);
+                          border:2px solid rgba(255,255,255,0.22);border-radius:50%;
+                          width:64px;height:64px;line-height:64px;
+                          font-size:30px;margin-bottom:18px;">📎</div>
+
+              <h1 style="margin:0 0 8px;font-size:24px;font-weight:700;color:#ffffff;letter-spacing:0.2px;">
+                Costing File Submitted
+              </h1>
+
+              <p style="margin:0;font-size:14px;color:rgba(255,255,255,0.72);line-height:1.5;">
+                A costing document has been uploaded and is now available for review
+              </p>
+            </td>
+          </tr>
+
+          <!-- Timestamp banner -->
+          <tr>
+            <td style="background:#f0f6ff;border-bottom:1px solid #d8e6ff;padding:12px 48px;">
+              <table width="100%" cellpadding="0" cellspacing="0">
+                <tr>
+                  <td style="font-size:13px;color:#0d6efd;font-weight:600;">
+                    📂 &nbsp;New costing file uploaded
+                  </td>
+                  <td align="right" style="font-size:12px;color:#6b7a8d;white-space:nowrap;">
+                    🕐 &nbsp;${uploadedAt}
+                  </td>
+                </tr>
+              </table>
+            </td>
+          </tr>
+
+          <!-- Body -->
+          <tr>
+            <td style="padding:40px 48px;">
+
+              <p style="margin:0 0 28px;font-size:15px;color:#3d4a5c;line-height:1.7;">
+                Hello,<br/><br/>
+                A costing file has been successfully submitted for the RFQ listed below.
+                Please review the document in the RFQ Management portal and proceed
+                with the required actions.
+              </p>
+
+              <!-- RFQ details card -->
+              <table width="100%" cellpadding="0" cellspacing="0"
+                     style="border:1px solid #e2e8f0;border-radius:12px;overflow:hidden;margin-bottom:32px;">
+                <tr>
+                  <td colspan="2" style="background:#1a2e4a;padding:13px 22px;">
+                    <p style="margin:0;font-size:11px;font-weight:700;color:#ffffff;letter-spacing:1.8px;text-transform:uppercase;">
+                      RFQ Information
+                    </p>
+                  </td>
+                </tr>
+
+                <tr style="background:#f8fafc;">
+                  <td width="50%" style="padding:15px 22px;border-right:1px solid #e2e8f0;border-bottom:1px solid #e2e8f0;">
+                    <p style="margin:0 0 3px;font-size:10px;font-weight:700;color:#8a97a8;letter-spacing:1px;text-transform:uppercase;">
+                      RFQ ID
+                    </p>
+                    <p style="margin:0;font-size:16px;font-weight:700;color:#0f2044;">
+                      #${rfq.rfq_id}
+                    </p>
+                  </td>
+                  <td width="50%" style="padding:15px 22px;border-bottom:1px solid #e2e8f0;">
+                    <p style="margin:0 0 3px;font-size:10px;font-weight:700;color:#8a97a8;letter-spacing:1px;text-transform:uppercase;">
+                      Product Line
+                    </p>
+                    <p style="margin:0;font-size:16px;font-weight:700;color:#0f2044;">
+                      ${rfq.product_line || "N/A"}
+                    </p>
+                  </td>
+                </tr>
+
+                <tr style="background:#ffffff;">
+                  <td width="50%" style="padding:15px 22px;border-right:1px solid #e2e8f0;border-bottom:1px solid #e2e8f0;">
+                    <p style="margin:0 0 3px;font-size:10px;font-weight:700;color:#8a97a8;letter-spacing:1px;text-transform:uppercase;">
+                      Customer
+                    </p>
+                    <p style="margin:0;font-size:15px;font-weight:600;color:#0f2044;">
+                      ${rfq.customer_name || "N/A"}
+                    </p>
+                  </td>
+                  <td width="50%" style="padding:15px 22px;border-bottom:1px solid #e2e8f0;">
+                    <p style="margin:0 0 3px;font-size:10px;font-weight:700;color:#8a97a8;letter-spacing:1px;text-transform:uppercase;">
+                      Customer PN
+                    </p>
+                    <p style="margin:0;font-size:15px;font-weight:600;color:#0f2044;">
+                      ${rfq.customer_pn || "N/A"}
+                    </p>
+                  </td>
+                </tr>
+
+                <tr style="background:#f8fafc;">
+                  <td width="50%" style="padding:15px 22px;border-right:1px solid #e2e8f0;">
+                    <p style="margin:0 0 3px;font-size:10px;font-weight:700;color:#8a97a8;letter-spacing:1px;text-transform:uppercase;">
+                      Annual Volume
+                    </p>
+                    <p style="margin:0;font-size:15px;font-weight:600;color:#0f2044;">
+                      ${rfq.annual_volume ? Number(rfq.annual_volume).toLocaleString("en-US") : "N/A"} units
+                    </p>
+                  </td>
+                  <td width="50%" style="padding:15px 22px;">
+                    <p style="margin:0 0 3px;font-size:10px;font-weight:700;color:#8a97a8;letter-spacing:1px;text-transform:uppercase;">
+                      Requester
+                    </p>
+                    <p style="margin:0;font-size:15px;font-weight:600;color:#0f2044;">
+                      ${rfq.updated_by || rfq.created_by_email || "System"}
+                    </p>
+                  </td>
+                </tr>
+              </table>
+
+              <!-- CTA button -->
+              <table width="100%" cellpadding="0" cellspacing="0">
+                <tr>
+                  <td align="center" style="padding-bottom:28px;">
+                    <a href="${appUrl}" target="_blank"
+                       style="display:inline-block;padding:15px 42px;background:#0d6efd;
+                              color:#ffffff;text-decoration:none;border-radius:10px;
+                              font-size:15px;font-weight:700;letter-spacing:0.3px;
+                              box-shadow:0 6px 20px rgba(13,110,253,0.38);">
+                      🔍 &nbsp; Open RFQ Application
+                    </a>
+                  </td>
+                </tr>
+              </table>
+
+              <!-- Action note -->
+              <table width="100%" cellpadding="0" cellspacing="0"
+                     style="background:#fffbeb;border:1px solid #fde68a;border-left:4px solid #f59e0b;border-radius:8px;">
+                <tr>
+                  <td style="padding:14px 18px;">
+                    <p style="margin:0;font-size:13px;color:#92400e;line-height:1.6;">
+                      ⚠️ &nbsp;<strong>Action required:</strong>&nbsp;
+                      Please log in to the RFQ Management portal to review the uploaded
+                      costing file and take the appropriate next steps.
+                    </p>
+                  </td>
+                </tr>
+              </table>
+
+            </td>
+          </tr>
+
+          <!-- Divider -->
+          <tr>
+            <td style="padding:0 48px;">
+              <hr style="border:none;border-top:1px solid #e9ecef;margin:0;"/>
+            </td>
+          </tr>
+
+          <!-- Footer -->
+          <tr>
+            <td style="padding:24px 48px;text-align:center;">
+              <p style="margin:0 0 4px;font-size:13px;color:#6b7a8d;">
+                Automated notification from&nbsp;
+                <strong style="color:#0f2044;">AvoCarbon RFQ Management System</strong>
+              </p>
+              <p style="margin:0 0 12px;font-size:12px;color:#9aa5b4;">
+                Please do not reply directly to this email.
+              </p>
+              <a href="${appUrl}" target="_blank"
+                 style="font-size:12px;color:#0d6efd;text-decoration:none;">
+                ${appUrl}
+              </a>
+            </td>
+          </tr>
+
+          <!-- Bottom accent -->
+          <tr>
+            <td style="height:4px;background:#0d6efd;"></td>
+          </tr>
+
+        </table>
+      </td>
+    </tr>
+  </table>
+
+</body>
+</html>
+  `,
+    };
+
+    await transporter.sendMail(mailOptions);
+    console.log(`Costing submission email sent to ${recipientEmail}`);
 
     res.status(200).json({
       message: "Costing file uploaded successfully",
@@ -147,37 +324,27 @@ router.post("/rfq/:id/upload-feasibility", upload.single("file"), async (req, re
     }
 
     const rfq = updateResult.rows[0];
-    const productLine = rfq.product_line;
     const uploadedAt = new Date().toLocaleString("en-GB", {
-      day: "2-digit", month: "short", year: "numeric",
-      hour: "2-digit", minute: "2-digit",
+      day: "2-digit",
+      month: "short",
+      year: "numeric",
+      hour: "2-digit",
+      minute: "2-digit",
     });
 
-    // ── Generic notification email (existing logic) ──────────────────────────
-    let recipientEmail = null;
+    const recipientEmail = rfq.created_by_email;
 
-    switch (productLine) {
-      case "Brushes":
-        recipientEmail = "cedric.bouvier@avocarbon.com";
-        break;
-      case "Chokes":
-        recipientEmail = "allan.riegel@avocarbon.com";
-        break;
-      case "Assembly":
-        recipientEmail = "allan.riegel@avocarbon.com";
-        break;
-      default:
-        console.log(`No responsible email configured for product line: ${productLine}`);
-        break;
+    if (!recipientEmail) {
+      return res.status(400).json({ message: "Requester email missing." });
     }
 
-    if (recipientEmail) {
-      const appUrl = "https://rfq-management.azurewebsites.net/";
-      const mailOptions = {
-        from: "administration.STS@avocarbon.com",
-        to: recipientEmail,
-        subject: `📋 Feasibility File Submitted — RFQ #${rfq.rfq_id} | ${rfq.customer_name || "N/A"}`,
-        html: `
+    const appUrl = "https://rfq-management.azurewebsites.net/";
+
+    const mailOptions = {
+      from: "administration.STS@avocarbon.com",
+      to: recipientEmail,
+      subject: `📋 Feasibility File Submitted — RFQ #${rfq.rfq_id} | ${rfq.customer_name || "N/A"}`,
+      html: `
 <!DOCTYPE html>
 <html lang="en">
 <head>
@@ -194,16 +361,12 @@ router.post("/rfq/:id/upload-feasibility", upload.single("file"), async (req, re
                style="background:#ffffff;border-radius:16px;overflow:hidden;
                       box-shadow:0 8px 32px rgba(0,0,0,0.10);">
 
-          <!-- ░░ TOP ACCENT BAR ░░ -->
           <tr>
-            <td style="height:5px;background:linear-gradient(90deg,#0d6efd 0%,#6ea8fe 50%,#0dcaf0 100%);"></td>
+            <td style="height:5px;background:#0d6efd;"></td>
           </tr>
 
-          <!-- ░░ HEADER ░░ -->
           <tr>
-            <td style="background:linear-gradient(135deg,#0f2044 0%,#1a3a6b 100%);
-                       padding:44px 48px 36px;text-align:center;">
-              <!-- Icon badge -->
+            <td style="background:#1a2e4a;padding:44px 48px 36px;text-align:center;">
               <div style="display:inline-block;background:rgba(255,255,255,0.12);
                           border:2px solid rgba(255,255,255,0.22);border-radius:50%;
                           width:64px;height:64px;line-height:64px;
@@ -218,10 +381,8 @@ router.post("/rfq/:id/upload-feasibility", upload.single("file"), async (req, re
             </td>
           </tr>
 
-          <!-- ░░ TIMESTAMP BANNER ░░ -->
           <tr>
-            <td style="background:#f0f6ff;border-bottom:1px solid #d8e6ff;
-                       padding:12px 48px;">
+            <td style="background:#f0f6ff;border-bottom:1px solid #d8e6ff;padding:12px 48px;">
               <table width="100%" cellpadding="0" cellspacing="0">
                 <tr>
                   <td style="font-size:13px;color:#0d6efd;font-weight:600;">
@@ -235,7 +396,6 @@ router.post("/rfq/:id/upload-feasibility", upload.single("file"), async (req, re
             </td>
           </tr>
 
-          <!-- ░░ BODY ░░ -->
           <tr>
             <td style="padding:40px 48px;">
 
@@ -246,15 +406,11 @@ router.post("/rfq/:id/upload-feasibility", upload.single("file"), async (req, re
                 with the required actions.
               </p>
 
-              <!-- ── RFQ Details card ── -->
               <table width="100%" cellpadding="0" cellspacing="0"
                      style="border:1px solid #e2e8f0;border-radius:12px;
                             overflow:hidden;margin-bottom:32px;">
-                <!-- card header -->
                 <tr>
-                  <td colspan="2"
-                      style="background:linear-gradient(90deg,#0f2044,#1a3a6b);
-                             padding:13px 22px;">
+                  <td colspan="2" style="background:#1a2e4a;padding:13px 22px;">
                     <p style="margin:0;font-size:11px;font-weight:700;
                                color:#ffffff;letter-spacing:1.8px;
                                text-transform:uppercase;">
@@ -263,22 +419,17 @@ router.post("/rfq/:id/upload-feasibility", upload.single("file"), async (req, re
                   </td>
                 </tr>
 
-                <!-- row 1 -->
                 <tr style="background:#f8fafc;">
-                  <td width="50%" style="padding:15px 22px;
-                      border-right:1px solid #e2e8f0;border-bottom:1px solid #e2e8f0;">
-                    <p style="margin:0 0 3px;font-size:10px;font-weight:700;
-                               color:#8a97a8;letter-spacing:1px;text-transform:uppercase;">
+                  <td width="50%" style="padding:15px 22px;border-right:1px solid #e2e8f0;border-bottom:1px solid #e2e8f0;">
+                    <p style="margin:0 0 3px;font-size:10px;font-weight:700;color:#8a97a8;letter-spacing:1px;text-transform:uppercase;">
                       RFQ ID
                     </p>
                     <p style="margin:0;font-size:16px;font-weight:700;color:#0f2044;">
                       #${rfq.rfq_id}
                     </p>
                   </td>
-                  <td width="50%" style="padding:15px 22px;
-                      border-bottom:1px solid #e2e8f0;">
-                    <p style="margin:0 0 3px;font-size:10px;font-weight:700;
-                               color:#8a97a8;letter-spacing:1px;text-transform:uppercase;">
+                  <td width="50%" style="padding:15px 22px;border-bottom:1px solid #e2e8f0;">
+                    <p style="margin:0 0 3px;font-size:10px;font-weight:700;color:#8a97a8;letter-spacing:1px;text-transform:uppercase;">
                       Product Line
                     </p>
                     <p style="margin:0;font-size:16px;font-weight:700;color:#0f2044;">
@@ -287,22 +438,17 @@ router.post("/rfq/:id/upload-feasibility", upload.single("file"), async (req, re
                   </td>
                 </tr>
 
-                <!-- row 2 -->
                 <tr style="background:#ffffff;">
-                  <td width="50%" style="padding:15px 22px;
-                      border-right:1px solid #e2e8f0;border-bottom:1px solid #e2e8f0;">
-                    <p style="margin:0 0 3px;font-size:10px;font-weight:700;
-                               color:#8a97a8;letter-spacing:1px;text-transform:uppercase;">
+                  <td width="50%" style="padding:15px 22px;border-right:1px solid #e2e8f0;border-bottom:1px solid #e2e8f0;">
+                    <p style="margin:0 0 3px;font-size:10px;font-weight:700;color:#8a97a8;letter-spacing:1px;text-transform:uppercase;">
                       Customer
                     </p>
                     <p style="margin:0;font-size:15px;font-weight:600;color:#0f2044;">
                       ${rfq.customer_name || "N/A"}
                     </p>
                   </td>
-                  <td width="50%" style="padding:15px 22px;
-                      border-bottom:1px solid #e2e8f0;">
-                    <p style="margin:0 0 3px;font-size:10px;font-weight:700;
-                               color:#8a97a8;letter-spacing:1px;text-transform:uppercase;">
+                  <td width="50%" style="padding:15px 22px;border-bottom:1px solid #e2e8f0;">
+                    <p style="margin:0 0 3px;font-size:10px;font-weight:700;color:#8a97a8;letter-spacing:1px;text-transform:uppercase;">
                       Customer PN
                     </p>
                     <p style="margin:0;font-size:15px;font-weight:600;color:#0f2044;">
@@ -311,12 +457,9 @@ router.post("/rfq/:id/upload-feasibility", upload.single("file"), async (req, re
                   </td>
                 </tr>
 
-                <!-- row 3 -->
                 <tr style="background:#f8fafc;">
-                  <td width="50%" style="padding:15px 22px;
-                      border-right:1px solid #e2e8f0;">
-                    <p style="margin:0 0 3px;font-size:10px;font-weight:700;
-                               color:#8a97a8;letter-spacing:1px;text-transform:uppercase;">
+                  <td width="50%" style="padding:15px 22px;border-right:1px solid #e2e8f0;">
+                    <p style="margin:0 0 3px;font-size:10px;font-weight:700;color:#8a97a8;letter-spacing:1px;text-transform:uppercase;">
                       Annual Volume
                     </p>
                     <p style="margin:0;font-size:15px;font-weight:600;color:#0f2044;">
@@ -324,9 +467,8 @@ router.post("/rfq/:id/upload-feasibility", upload.single("file"), async (req, re
                     </p>
                   </td>
                   <td width="50%" style="padding:15px 22px;">
-                    <p style="margin:0 0 3px;font-size:10px;font-weight:700;
-                               color:#8a97a8;letter-spacing:1px;text-transform:uppercase;">
-                      Uploaded By
+                    <p style="margin:0 0 3px;font-size:10px;font-weight:700;color:#8a97a8;letter-spacing:1px;text-transform:uppercase;">
+                      Requester
                     </p>
                     <p style="margin:0;font-size:15px;font-weight:600;color:#0f2044;">
                       ${rfq.updated_by || rfq.created_by_email || "System"}
@@ -335,13 +477,12 @@ router.post("/rfq/:id/upload-feasibility", upload.single("file"), async (req, re
                 </tr>
               </table>
 
-              <!-- ── CTA Button ── -->
               <table width="100%" cellpadding="0" cellspacing="0">
                 <tr>
                   <td align="center" style="padding-bottom:28px;">
                     <a href="${appUrl}" target="_blank"
                        style="display:inline-block;padding:15px 42px;
-                              background:linear-gradient(135deg,#0d6efd 0%,#0056d2 100%);
+                              background:#0d6efd;
                               color:#ffffff;text-decoration:none;border-radius:10px;
                               font-size:15px;font-weight:700;letter-spacing:0.3px;
                               box-shadow:0 6px 20px rgba(13,110,253,0.38);">
@@ -351,7 +492,6 @@ router.post("/rfq/:id/upload-feasibility", upload.single("file"), async (req, re
                 </tr>
               </table>
 
-              <!-- ── Action note ── -->
               <table width="100%" cellpadding="0" cellspacing="0"
                      style="background:#fffbeb;border:1px solid #fde68a;
                             border-left:4px solid #f59e0b;border-radius:8px;">
@@ -369,14 +509,12 @@ router.post("/rfq/:id/upload-feasibility", upload.single("file"), async (req, re
             </td>
           </tr>
 
-          <!-- ░░ DIVIDER ░░ -->
           <tr>
             <td style="padding:0 48px;">
               <hr style="border:none;border-top:1px solid #e9ecef;margin:0;"/>
             </td>
           </tr>
 
-          <!-- ░░ FOOTER ░░ -->
           <tr>
             <td style="padding:24px 48px;text-align:center;">
               <p style="margin:0 0 4px;font-size:13px;color:#6b7a8d;">
@@ -393,9 +531,8 @@ router.post("/rfq/:id/upload-feasibility", upload.single("file"), async (req, re
             </td>
           </tr>
 
-          <!-- ░░ BOTTOM ACCENT BAR ░░ -->
           <tr>
-            <td style="height:4px;background:linear-gradient(90deg,#0d6efd 0%,#6ea8fe 50%,#0dcaf0 100%);"></td>
+            <td style="height:4px;background:#0d6efd;"></td>
           </tr>
 
         </table>
@@ -405,353 +542,11 @@ router.post("/rfq/:id/upload-feasibility", upload.single("file"), async (req, re
 
 </body>
 </html>
-        `,
-      };
+      `,
+    };
 
-      await transporter.sendMail(mailOptions);
-      console.log(`Feasibility submission email sent to ${recipientEmail}`);
-    }
-
-    // ── Additional modern notification for Chokes → mootaz ──────────────────
-    if (productLine === "Seals") {
-      const chokesMailOptions = {
-        from: "administration.STS@avocarbon.com",
-        to: "mootaz.farwa@avocarbon.com",
-        subject: `📋 Feasibility File Submitted — RFQ #${rfq.rfq_id} | ${rfq.customer_name || "N/A"}`,
-        html: `
-<!DOCTYPE html>
-<html lang="en">
-<head>
-  <meta charset="UTF-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
-  <title>Feasibility File Submitted</title>
-</head>
-<body style="margin:0;padding:0;background-color:#f4f6f9;font-family:'Segoe UI',Arial,sans-serif;">
-
-  <table width="100%" cellpadding="0" cellspacing="0" style="background:#f4f6f9;padding:40px 0;">
-    <tr>
-      <td align="center">
-        <table width="620" cellpadding="0" cellspacing="0" style="background:#ffffff;border-radius:12px;overflow:hidden;box-shadow:0 4px 24px rgba(0,0,0,0.08);">
-
-          <!-- Header -->
-          <tr>
-            <td style="background:#1a2e4a;padding:36px 40px;text-align:center;">
-              <p style="margin:0 0 6px 0;font-size:13px;color:rgba(255,255,255,0.7);letter-spacing:2px;text-transform:uppercase;">RFQ Management System</p>
-              <h1 style="margin:0;font-size:26px;font-weight:700;color:#ffffff;letter-spacing:0.3px;">
-                Feasibility File Submitted
-              </h1>
-              <p style="margin:12px 0 0 0;font-size:14px;color:rgba(255,255,255,0.85);">
-                A feasibility document has been uploaded and is ready for your review
-              </p>
-            </td>
-          </tr>
-
-          <!-- Status Banner -->
-          <tr>
-            <td style="background:#e8f4fd;padding:14px 40px;border-bottom:1px solid #d0e8f8;">
-              <table width="100%" cellpadding="0" cellspacing="0">
-                <tr>
-                  <td style="font-size:13px;color:#0d6efd;font-weight:600;">
-                    📁 &nbsp;New feasibility file uploaded
-                  </td>
-                  <td align="right" style="font-size:12px;color:#6b7a8d;">
-                    ${uploadedAt}
-                  </td>
-                </tr>
-              </table>
-            </td>
-          </tr>
-
-          <!-- Body -->
-          <tr>
-            <td style="padding:36px 40px;">
-
-              <p style="margin:0 0 24px 0;font-size:15px;color:#3d4a5c;line-height:1.6;">
-                Dear <strong>Mootaz</strong>,<br/><br/>
-                A feasibility file has been submitted for the RFQ below. Please log in to the RFQ Management portal to review the document and take the appropriate next steps.
-              </p>
-
-              <!-- RFQ Details Card -->
-              <table width="100%" cellpadding="0" cellspacing="0"
-                     style="background:#f8fafc;border:1px solid #e2e8f0;border-radius:10px;overflow:hidden;margin-bottom:28px;">
-                <tr>
-                  <td style="background:#1a2e4a;padding:12px 20px;">
-                    <p style="margin:0;font-size:12px;font-weight:700;color:#ffffff;letter-spacing:1.5px;text-transform:uppercase;">
-                      RFQ Details
-                    </p>
-                  </td>
-                </tr>
-                <tr>
-                  <td style="padding:20px;">
-                    <table width="100%" cellpadding="0" cellspacing="0">
-
-                      <tr>
-                        <td width="48%" style="padding:8px 12px;background:#ffffff;border-radius:6px;margin-bottom:8px;">
-                          <p style="margin:0;font-size:11px;color:#8a97a8;text-transform:uppercase;letter-spacing:0.8px;font-weight:600;">RFQ ID</p>
-                          <p style="margin:4px 0 0 0;font-size:15px;color:#1a2e4a;font-weight:700;">#${rfq.rfq_id}</p>
-                        </td>
-                        <td width="4%"></td>
-                        <td width="48%" style="padding:8px 12px;background:#ffffff;border-radius:6px;">
-                          <p style="margin:0;font-size:11px;color:#8a97a8;text-transform:uppercase;letter-spacing:0.8px;font-weight:600;">Product Line</p>
-                          <p style="margin:4px 0 0 0;font-size:15px;color:#1a2e4a;font-weight:700;">${rfq.product_line || "N/A"}</p>
-                        </td>
-                      </tr>
-
-                      <tr><td colspan="3" style="height:10px;"></td></tr>
-
-                      <tr>
-                        <td width="48%" style="padding:8px 12px;background:#ffffff;border-radius:6px;">
-                          <p style="margin:0;font-size:11px;color:#8a97a8;text-transform:uppercase;letter-spacing:0.8px;font-weight:600;">Customer</p>
-                          <p style="margin:4px 0 0 0;font-size:15px;color:#1a2e4a;font-weight:700;">${rfq.customer_name || "N/A"}</p>
-                        </td>
-                        <td width="4%"></td>
-                        <td width="48%" style="padding:8px 12px;background:#ffffff;border-radius:6px;">
-                          <p style="margin:0;font-size:11px;color:#8a97a8;text-transform:uppercase;letter-spacing:0.8px;font-weight:600;">Customer PN</p>
-                          <p style="margin:4px 0 0 0;font-size:15px;color:#1a2e4a;font-weight:700;">${rfq.customer_pn || "N/A"}</p>
-                        </td>
-                      </tr>
-
-                      <tr><td colspan="3" style="height:10px;"></td></tr>
-
-                      <tr>
-                        <td width="48%" style="padding:8px 12px;background:#ffffff;border-radius:6px;">
-                          <p style="margin:0;font-size:11px;color:#8a97a8;text-transform:uppercase;letter-spacing:0.8px;font-weight:600;">Annual Volume</p>
-                          <p style="margin:4px 0 0 0;font-size:15px;color:#1a2e4a;font-weight:700;">${rfq.annual_volume ? Number(rfq.annual_volume).toLocaleString() : "N/A"}</p>
-                        </td>
-                        <td width="4%"></td>
-                        <td width="48%" style="padding:8px 12px;background:#ffffff;border-radius:6px;">
-                          <p style="margin:0;font-size:11px;color:#8a97a8;text-transform:uppercase;letter-spacing:0.8px;font-weight:600;">Uploaded By</p>
-                          <p style="margin:4px 0 0 0;font-size:15px;color:#1a2e4a;font-weight:700;">${rfq.updated_by || rfq.created_by_email || "System"}</p>
-                        </td>
-                      </tr>
-
-                    </table>
-                  </td>
-                </tr>
-              </table>
-
-              <!-- CTA Button -->
-              <table width="100%" cellpadding="0" cellspacing="0">
-                <tr>
-                  <td align="center" style="padding:8px 0 24px 0;">
-                    <a href="https://rfq-management.azurewebsites.net/"
-                       target="_blank"
-                       style="display:inline-block;padding:14px 36px;background:#0d6efd;color:#ffffff;text-decoration:none;border-radius:8px;font-size:15px;font-weight:600;letter-spacing:0.3px;box-shadow:0 4px 14px rgba(13,110,253,0.35);">
-                      🔍 &nbsp; Review Feasibility File
-                    </a>
-                  </td>
-                </tr>
-              </table>
-
-              <!-- Info Note -->
-              <table width="100%" cellpadding="0" cellspacing="0"
-                     style="background:#fffbeb;border:1px solid #fde68a;border-radius:8px;">
-                <tr>
-                  <td style="padding:14px 18px;">
-                    <p style="margin:0;font-size:13px;color:#92400e;line-height:1.5;">
-                      ⚠️ &nbsp;<strong>Action required:</strong> The costing file submission for this RFQ is now unlocked. Please review the feasibility document and proceed accordingly.
-                    </p>
-                  </td>
-                </tr>
-              </table>
-
-            </td>
-          </tr>
-
-          <!-- Footer -->
-          <tr>
-            <td style="background:#f8fafc;border-top:1px solid #e2e8f0;padding:24px 40px;text-align:center;">
-              <p style="margin:0 0 6px 0;font-size:13px;color:#6b7a8d;">
-                This is an automated notification from the <strong>AvoCarbon RFQ Management System</strong>.
-              </p>
-              <p style="margin:0;font-size:12px;color:#9aa5b4;">
-                Please do not reply directly to this email.
-              </p>
-            </td>
-          </tr>
-
-        </table>
-      </td>
-    </tr>
-  </table>
-
-</body>
-</html>
-        `,
-      };
-
-      await transporter.sendMail(chokesMailOptions);
-      console.log(`✅ Modern feasibility notification sent to mootaz.farwa@avocarbon.com for Chokes RFQ #${rfq.rfq_id}`);
-    } else if (productLine === "Assembly") {
-      const assemblyMailOptions = {
-        from: "administration.STS@avocarbon.com",
-        to: "rami.mejri@avocarbon.com",
-        subject: `📋 Feasibility File Submitted — RFQ #${rfq.rfq_id} | ${rfq.customer_name || "N/A"}`,
-        html: `
-<!DOCTYPE html>
-<html lang="en">
-<head>
-  <meta charset="UTF-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
-  <title>Feasibility File Submitted</title>
-</head>
-<body style="margin:0;padding:0;background-color:#f4f6f9;font-family:'Segoe UI',Arial,sans-serif;">
-
-  <table width="100%" cellpadding="0" cellspacing="0" style="background:#f4f6f9;padding:40px 0;">
-    <tr>
-      <td align="center">
-        <table width="620" cellpadding="0" cellspacing="0" style="background:#ffffff;border-radius:12px;overflow:hidden;box-shadow:0 4px 24px rgba(0,0,0,0.08);">
-
-          <!-- Header -->
-          <tr>
-            <td style="background:#1a2e4a;padding:36px 40px;text-align:center;">
-              <p style="margin:0 0 6px 0;font-size:13px;color:rgba(255,255,255,0.7);letter-spacing:2px;text-transform:uppercase;">RFQ Management System</p>
-              <h1 style="margin:0;font-size:26px;font-weight:700;color:#ffffff;letter-spacing:0.3px;">
-                Feasibility File Submitted
-              </h1>
-              <p style="margin:12px 0 0 0;font-size:14px;color:rgba(255,255,255,0.85);">
-                A feasibility document has been uploaded and is ready for your review
-              </p>
-            </td>
-          </tr>
-
-          <!-- Status Banner -->
-          <tr>
-            <td style="background:#e8f4fd;padding:14px 40px;border-bottom:1px solid #d0e8f8;">
-              <table width="100%" cellpadding="0" cellspacing="0">
-                <tr>
-                  <td style="font-size:13px;color:#0d6efd;font-weight:600;">
-                    📁 &nbsp;New feasibility file uploaded
-                  </td>
-                  <td align="right" style="font-size:12px;color:#6b7a8d;">
-                    ${uploadedAt}
-                  </td>
-                </tr>
-              </table>
-            </td>
-          </tr>
-
-          <!-- Body -->
-          <tr>
-            <td style="padding:36px 40px;">
-
-              <p style="margin:0 0 24px 0;font-size:15px;color:#3d4a5c;line-height:1.6;">
-                Dear <strong>Rami</strong>,<br/><br/>
-                A feasibility file has been submitted for the RFQ below. Please log in to the RFQ Management portal to review the document and take the appropriate next steps.
-              </p>
-
-              <!-- RFQ Details Card -->
-              <table width="100%" cellpadding="0" cellspacing="0"
-                     style="background:#f8fafc;border:1px solid #e2e8f0;border-radius:10px;overflow:hidden;margin-bottom:28px;">
-                <tr>
-                  <td style="background:#1a2e4a;padding:12px 20px;">
-                    <p style="margin:0;font-size:12px;font-weight:700;color:#ffffff;letter-spacing:1.5px;text-transform:uppercase;">
-                      RFQ Details
-                    </p>
-                  </td>
-                </tr>
-                <tr>
-                  <td style="padding:20px;">
-                    <table width="100%" cellpadding="0" cellspacing="0">
-
-                      <tr>
-                        <td width="48%" style="padding:8px 12px;background:#ffffff;border-radius:6px;margin-bottom:8px;">
-                          <p style="margin:0;font-size:11px;color:#8a97a8;text-transform:uppercase;letter-spacing:0.8px;font-weight:600;">RFQ ID</p>
-                          <p style="margin:4px 0 0 0;font-size:15px;color:#1a2e4a;font-weight:700;">#${rfq.rfq_id}</p>
-                        </td>
-                        <td width="4%"></td>
-                        <td width="48%" style="padding:8px 12px;background:#ffffff;border-radius:6px;">
-                          <p style="margin:0;font-size:11px;color:#8a97a8;text-transform:uppercase;letter-spacing:0.8px;font-weight:600;">Product Line</p>
-                          <p style="margin:4px 0 0 0;font-size:15px;color:#1a2e4a;font-weight:700;">${rfq.product_line || "N/A"}</p>
-                        </td>
-                      </tr>
-
-                      <tr><td colspan="3" style="height:10px;"></td></tr>
-
-                      <tr>
-                        <td width="48%" style="padding:8px 12px;background:#ffffff;border-radius:6px;">
-                          <p style="margin:0;font-size:11px;color:#8a97a8;text-transform:uppercase;letter-spacing:0.8px;font-weight:600;">Customer</p>
-                          <p style="margin:4px 0 0 0;font-size:15px;color:#1a2e4a;font-weight:700;">${rfq.customer_name || "N/A"}</p>
-                        </td>
-                        <td width="4%"></td>
-                        <td width="48%" style="padding:8px 12px;background:#ffffff;border-radius:6px;">
-                          <p style="margin:0;font-size:11px;color:#8a97a8;text-transform:uppercase;letter-spacing:0.8px;font-weight:600;">Customer PN</p>
-                          <p style="margin:4px 0 0 0;font-size:15px;color:#1a2e4a;font-weight:700;">${rfq.customer_pn || "N/A"}</p>
-                        </td>
-                      </tr>
-
-                      <tr><td colspan="3" style="height:10px;"></td></tr>
-
-                      <tr>
-                        <td width="48%" style="padding:8px 12px;background:#ffffff;border-radius:6px;">
-                          <p style="margin:0;font-size:11px;color:#8a97a8;text-transform:uppercase;letter-spacing:0.8px;font-weight:600;">Annual Volume</p>
-                          <p style="margin:4px 0 0 0;font-size:15px;color:#1a2e4a;font-weight:700;">${rfq.annual_volume ? Number(rfq.annual_volume).toLocaleString() : "N/A"}</p>
-                        </td>
-                        <td width="4%"></td>
-                        <td width="48%" style="padding:8px 12px;background:#ffffff;border-radius:6px;">
-                          <p style="margin:0;font-size:11px;color:#8a97a8;text-transform:uppercase;letter-spacing:0.8px;font-weight:600;">Uploaded By</p>
-                          <p style="margin:4px 0 0 0;font-size:15px;color:#1a2e4a;font-weight:700;">${rfq.updated_by || rfq.created_by_email || "System"}</p>
-                        </td>
-                      </tr>
-
-                    </table>
-                  </td>
-                </tr>
-              </table>
-
-              <!-- CTA Button -->
-              <table width="100%" cellpadding="0" cellspacing="0">
-                <tr>
-                  <td align="center" style="padding:8px 0 24px 0;">
-                    <a href="https://rfq-management.azurewebsites.net/"
-                       target="_blank"
-                       style="display:inline-block;padding:14px 36px;background:#0d6efd;color:#ffffff;text-decoration:none;border-radius:8px;font-size:15px;font-weight:600;letter-spacing:0.3px;box-shadow:0 4px 14px rgba(13,110,253,0.35);">
-                      🔍 &nbsp; Review Feasibility File
-                    </a>
-                  </td>
-                </tr>
-              </table>
-
-              <!-- Info Note -->
-              <table width="100%" cellpadding="0" cellspacing="0"
-                     style="background:#fffbeb;border:1px solid #fde68a;border-radius:8px;">
-                <tr>
-                  <td style="padding:14px 18px;">
-                    <p style="margin:0;font-size:13px;color:#92400e;line-height:1.5;">
-                      ⚠️ &nbsp;<strong>Action required:</strong> The costing file submission for this RFQ is now unlocked. Please review the feasibility document and proceed accordingly.
-                    </p>
-                  </td>
-                </tr>
-              </table>
-
-            </td>
-          </tr>
-
-          <!-- Footer -->
-          <tr>
-            <td style="background:#f8fafc;border-top:1px solid #e2e8f0;padding:24px 40px;text-align:center;">
-              <p style="margin:0 0 6px 0;font-size:13px;color:#6b7a8d;">
-                This is an automated notification from the <strong>AvoCarbon RFQ Management System</strong>.
-              </p>
-              <p style="margin:0;font-size:12px;color:#9aa5b4;">
-                Please do not reply directly to this email.
-              </p>
-            </td>
-          </tr>
-
-        </table>
-      </td>
-    </tr>
-  </table>
-
-</body>
-</html>
-        `,
-      };
-
-      await transporter.sendMail(assemblyMailOptions);
-      console.log(`✅ Modern feasibility notification sent to rami.mejri@avocarbon.com (Assembly) for RFQ #${rfq.rfq_id}`);
-    }
+    await transporter.sendMail(mailOptions);
+    console.log(`Feasibility submission email sent to ${recipientEmail}`);
 
     res.status(200).json({
       message: "Feasibility file uploaded successfully",
@@ -776,7 +571,7 @@ router.post("/rfq/send-costing-email/:id", upload.single("file"), async (req, re
   }
 
   try {
-    // 🔍 1. Get requester email and product_line from DB
+    // Get requester email and product_line from DB
     const result = await pool.query(
       `SELECT created_by_email, product_line FROM public.main WHERE rfq_id = $1`,
       [id]
@@ -793,28 +588,9 @@ router.post("/rfq/send-costing-email/:id", upload.single("file"), async (req, re
       return res.status(400).json({ message: "Requester email missing." });
     }
 
-    if (!productLine) {
-      return res.status(400).json({ message: "Product line missing." });
-    }
+    // Send directly to created_by_email
+    const recipientEmail = requesterEmail;
 
-    // 🎯 2. Determine recipient email based on product_line
-    let recipientEmail;
-
-    switch (productLine) {
-      case "Chokes":
-        recipientEmail = "mootaz.farwa@avocarbon.com";
-        break;
-      case "Assembly":
-        recipientEmail = "mootaz.farwa@avocarbon.com";
-        break;
-      case "Brushes":
-        recipientEmail = "chaima.benyahia@avocarbon.com";
-        break;
-      default:
-        console.log(`ℹ️ No specific product line match for "${productLine}", sending to requester: ${requesterEmail}`);
-    }
-
-    // 📨 3. Prepare and send email
     const mailOptions = {
       from: "administration.STS@avocarbon.com",
       to: recipientEmail,
@@ -822,7 +598,7 @@ router.post("/rfq/send-costing-email/:id", upload.single("file"), async (req, re
       html: `
         <h3>Dear Requester,</h3>
         <p>Please find attached the costing file related to your RFQ #${id}.</p>
-        <p><strong>Product Line:</strong> ${productLine}</p>
+        <p><strong>Product Line:</strong> ${productLine || "N/A"}</p>
         <p>Best regards,<br>RFQ Management Team</p>
       `,
       attachments: [
@@ -1044,43 +820,236 @@ router.get("/rfq", async (req, res) => {
 });
 
 async function sendConfirmEmail(rfq) {
-  const rfqDetailsUrl = `https://rfq-management.azurewebsites.net/`;
+  const appUrl = "https://rfq-management.azurewebsites.net/";
+
+  // Send to costing person based on product line
+  const costingMap = {
+    Chokes: { to: "allan.riegel@avocarbon.com", firstName: "Allan" },
+    Brushes: { to: "francis.vimalraj@avocarbon.com", firstName: "Francis" },
+    Seals: { to: "mootaz.farwa@avocarbon.com", firstName: "Mootaz" },
+    Assembly: { to: "fatma.guermassi@avocarbon.com", firstName: "Fatma" },
+  };
+
+  const target = costingMap[rfq.product_line];
+
+  if (!target) {
+    console.log(`⚠️ No costing recipient configured for product line "${rfq.product_line}" — confirm email skipped.`);
+    return;
+  }
+
+  const confirmedAt = new Date().toLocaleString("en-GB", {
+    day: "2-digit",
+    month: "short",
+    year: "numeric",
+    hour: "2-digit",
+    minute: "2-digit",
+  });
 
   const mailOptions = {
     from: "administration.STS@avocarbon.com",
-    to: "mootaz.farwa@avocarbon.com",
-    subject: `RFQ #${rfq.rfq_id} Confirmed`,
+    to: target.to,
+    subject: `✅ RFQ Confirmed — #${rfq.rfq_id} | ${rfq.customer_name || "N/A"}`,
     html: `
-      <h2>RFQ Confirmed</h2>
-      <p>The following RFQ has been confirmed:</p>
-      <ul>
-        <li><strong>RFQ ID:</strong> ${rfq.rfq_id}</li>
-        <li><strong>Requester:</strong> ${rfq.created_by_email}</li>
-        <li><strong>Validator:</strong> ${rfq.validated_by_email}</li> 
-        <li><strong>Customer:</strong> ${rfq.customer_name}</li>
-        <li><strong>Product Line:</strong> ${rfq.product_line}</li>
-        <li><strong>Customer PN:</strong> ${rfq.customer_pn}</li>
-        <li><strong>Application:</strong> ${rfq.application}</li>
-        <li><strong>Annual Volume:</strong> ${rfq.annual_volume}</li>
-        <li><strong>Target Price (€):</strong> ${rfq.target_price_eur}</li>
-        <li><strong>TO Total (k€):</strong> ${rfq.to_total}</li>
-        <li><strong>Market:</strong> ${rfq.delivery_zone}</li>
-      </ul>
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8"/>
+  <meta name="viewport" content="width=device-width,initial-scale=1.0"/>
+  <title>RFQ Confirmed</title>
+</head>
+<body style="margin:0;padding:0;background-color:#eef2f7;font-family:'Segoe UI',Helvetica,Arial,sans-serif;">
 
-      <p>You can view full RFQ details and add costing information at the following link:</p>
-      <a href="${rfqDetailsUrl}" target="_blank"
-         style="display:inline-block;padding:10px 15px;background:#0078d4;color:white;text-decoration:none;border-radius:5px;">
-         View RFQ Details
-      </a>
+  <table width="100%" cellpadding="0" cellspacing="0" style="background:#eef2f7;padding:48px 16px;">
+    <tr>
+      <td align="center">
+        <table width="620" cellpadding="0" cellspacing="0"
+               style="background:#ffffff;border-radius:16px;overflow:hidden;
+                      box-shadow:0 8px 32px rgba(0,0,0,0.10);">
 
-      <br><br>
-      <p>Best regards,<br>RFQ Management System</p>
-    `
+          <tr>
+            <td style="height:5px;background:#16a34a;"></td>
+          </tr>
+
+          <tr>
+            <td style="background:#1a2e4a;padding:44px 48px 36px;text-align:center;">
+              <div style="display:inline-block;background:rgba(255,255,255,0.12);
+                          border:2px solid rgba(255,255,255,0.22);border-radius:50%;
+                          width:64px;height:64px;line-height:64px;
+                          font-size:30px;margin-bottom:18px;">✅</div>
+              <h1 style="margin:0 0 8px;font-size:24px;font-weight:700;color:#ffffff;letter-spacing:0.2px;">
+                RFQ Confirmed
+              </h1>
+              <p style="margin:0;font-size:14px;color:rgba(255,255,255,0.72);line-height:1.5;">
+                An RFQ has been confirmed and is ready for costing
+              </p>
+            </td>
+          </tr>
+
+          <tr>
+            <td style="background:#f0fdf4;border-bottom:1px solid #bbf7d0;padding:12px 48px;">
+              <table width="100%" cellpadding="0" cellspacing="0">
+                <tr>
+                  <td style="font-size:13px;color:#16a34a;font-weight:600;">
+                    🟢 &nbsp;Status changed to CONFIRMED
+                  </td>
+                  <td align="right" style="font-size:12px;color:#6b7a8d;white-space:nowrap;">
+                    🕐 &nbsp;${confirmedAt}
+                  </td>
+                </tr>
+              </table>
+            </td>
+          </tr>
+
+          <tr>
+            <td style="padding:40px 48px;">
+
+              <p style="margin:0 0 28px;font-size:15px;color:#3d4a5c;line-height:1.7;">
+                Dear <strong>${target.firstName}</strong>,<br/><br/>
+                The following RFQ has been officially confirmed. Please log in to the
+                RFQ Management portal to review the details and proceed with the costing.
+              </p>
+
+              <table width="100%" cellpadding="0" cellspacing="0"
+                     style="border:1px solid #e2e8f0;border-radius:12px;
+                            overflow:hidden;margin-bottom:32px;">
+
+                <tr>
+                  <td colspan="2" style="background:#1a2e4a;padding:13px 22px;">
+                    <p style="margin:0;font-size:11px;font-weight:700;
+                               color:#ffffff;letter-spacing:1.8px;text-transform:uppercase;">
+                      RFQ Information
+                    </p>
+                  </td>
+                </tr>
+
+                <tr style="background:#f8fafc;">
+                  <td width="50%" style="padding:15px 22px;border-right:1px solid #e2e8f0;border-bottom:1px solid #e2e8f0;">
+                    <p style="margin:0 0 3px;font-size:10px;font-weight:700;color:#8a97a8;letter-spacing:1px;text-transform:uppercase;">RFQ ID</p>
+                    <p style="margin:0;font-size:16px;font-weight:700;color:#1a2e4a;">#${rfq.rfq_id}</p>
+                  </td>
+                  <td width="50%" style="padding:15px 22px;border-bottom:1px solid #e2e8f0;">
+                    <p style="margin:0 0 3px;font-size:10px;font-weight:700;color:#8a97a8;letter-spacing:1px;text-transform:uppercase;">Product Line</p>
+                    <p style="margin:0;font-size:16px;font-weight:700;color:#1a2e4a;">${rfq.product_line || "N/A"}</p>
+                  </td>
+                </tr>
+
+                <tr style="background:#ffffff;">
+                  <td width="50%" style="padding:15px 22px;border-right:1px solid #e2e8f0;border-bottom:1px solid #e2e8f0;">
+                    <p style="margin:0 0 3px;font-size:10px;font-weight:700;color:#8a97a8;letter-spacing:1px;text-transform:uppercase;">Customer</p>
+                    <p style="margin:0;font-size:15px;font-weight:600;color:#1a2e4a;">${rfq.customer_name || "N/A"}</p>
+                  </td>
+                  <td width="50%" style="padding:15px 22px;border-bottom:1px solid #e2e8f0;">
+                    <p style="margin:0 0 3px;font-size:10px;font-weight:700;color:#8a97a8;letter-spacing:1px;text-transform:uppercase;">Customer PN</p>
+                    <p style="margin:0;font-size:15px;font-weight:600;color:#1a2e4a;">${rfq.customer_pn || "N/A"}</p>
+                  </td>
+                </tr>
+
+                <tr style="background:#f8fafc;">
+                  <td width="50%" style="padding:15px 22px;border-right:1px solid #e2e8f0;border-bottom:1px solid #e2e8f0;">
+                    <p style="margin:0 0 3px;font-size:10px;font-weight:700;color:#8a97a8;letter-spacing:1px;text-transform:uppercase;">Application</p>
+                    <p style="margin:0;font-size:15px;font-weight:600;color:#1a2e4a;">${rfq.application || "N/A"}</p>
+                  </td>
+                  <td width="50%" style="padding:15px 22px;border-bottom:1px solid #e2e8f0;">
+                    <p style="margin:0 0 3px;font-size:10px;font-weight:700;color:#8a97a8;letter-spacing:1px;text-transform:uppercase;">Market</p>
+                    <p style="margin:0;font-size:15px;font-weight:600;color:#1a2e4a;">${rfq.delivery_zone || "N/A"}</p>
+                  </td>
+                </tr>
+
+                <tr style="background:#ffffff;">
+                  <td width="50%" style="padding:15px 22px;border-right:1px solid #e2e8f0;border-bottom:1px solid #e2e8f0;">
+                    <p style="margin:0 0 3px;font-size:10px;font-weight:700;color:#8a97a8;letter-spacing:1px;text-transform:uppercase;">Annual Volume</p>
+                    <p style="margin:0;font-size:15px;font-weight:600;color:#1a2e4a;">${rfq.annual_volume ? Number(rfq.annual_volume).toLocaleString("en-US") : "N/A"} units</p>
+                  </td>
+                  <td width="50%" style="padding:15px 22px;border-bottom:1px solid #e2e8f0;">
+                    <p style="margin:0 0 3px;font-size:10px;font-weight:700;color:#8a97a8;letter-spacing:1px;text-transform:uppercase;">Target Price</p>
+                    <p style="margin:0;font-size:15px;font-weight:600;color:#1a2e4a;">${rfq.target_price_eur ? Number(rfq.target_price_eur).toFixed(2) + " €" : "N/A"}</p>
+                  </td>
+                </tr>
+
+                <tr style="background:#f8fafc;">
+                  <td width="50%" style="padding:15px 22px;border-right:1px solid #e2e8f0;">
+                    <p style="margin:0 0 3px;font-size:10px;font-weight:700;color:#8a97a8;letter-spacing:1px;text-transform:uppercase;">TO Total</p>
+                    <p style="margin:0;font-size:15px;font-weight:600;color:#1a2e4a;">${rfq.to_total || "N/A"}</p>
+                  </td>
+                  <td width="50%" style="padding:15px 22px;">
+                    <p style="margin:0 0 3px;font-size:10px;font-weight:700;color:#8a97a8;letter-spacing:1px;text-transform:uppercase;">Requester</p>
+                    <p style="margin:0;font-size:15px;font-weight:600;color:#1a2e4a;">${rfq.created_by_email || "N/A"}</p>
+                  </td>
+                </tr>
+
+              </table>
+
+              <table width="100%" cellpadding="0" cellspacing="0">
+                <tr>
+                  <td align="center" style="padding-bottom:28px;">
+                    <a href="${appUrl}" target="_blank"
+                       style="display:inline-block;padding:15px 42px;
+                              background:#16a34a;color:#ffffff;
+                              text-decoration:none;border-radius:10px;
+                              font-size:15px;font-weight:700;letter-spacing:0.3px;
+                              box-shadow:0 6px 20px rgba(22,163,74,0.35);">
+                      🔍 &nbsp; Open RFQ Application
+                    </a>
+                  </td>
+                </tr>
+              </table>
+
+              <table width="100%" cellpadding="0" cellspacing="0"
+                     style="background:#fffbeb;border:1px solid #fde68a;
+                            border-left:4px solid #f59e0b;border-radius:8px;">
+                <tr>
+                  <td style="padding:14px 18px;">
+                    <p style="margin:0;font-size:13px;color:#92400e;line-height:1.6;">
+                      ⚠️ &nbsp;<strong>Action required:</strong>&nbsp;
+                      Please log in to the RFQ Management portal to review this confirmed RFQ
+                      and begin the costing process.
+                    </p>
+                  </td>
+                </tr>
+              </table>
+
+            </td>
+          </tr>
+
+          <tr>
+            <td style="padding:0 48px;">
+              <hr style="border:none;border-top:1px solid #e9ecef;margin:0;"/>
+            </td>
+          </tr>
+
+          <tr>
+            <td style="padding:24px 48px;text-align:center;">
+              <p style="margin:0 0 4px;font-size:13px;color:#6b7a8d;">
+                Automated notification from&nbsp;
+                <strong style="color:#1a2e4a;">AvoCarbon RFQ Management System</strong>
+              </p>
+              <p style="margin:0 0 12px;font-size:12px;color:#9aa5b4;">
+                Please do not reply directly to this email.
+              </p>
+              <a href="${appUrl}" target="_blank"
+                 style="font-size:12px;color:#0d6efd;text-decoration:none;">
+                ${appUrl}
+              </a>
+            </td>
+          </tr>
+
+          <tr>
+            <td style="height:4px;background:#16a34a;"></td>
+          </tr>
+
+        </table>
+      </td>
+    </tr>
+  </table>
+
+</body>
+</html>
+    `,
   };
 
   try {
     await transporter.sendMail(mailOptions);
-    console.log(`✅ Confirmation email sent for RFQ #${rfq.rfq_id}`);
+    console.log(`✅ Confirmation email sent to ${target.to} (${rfq.product_line}) for RFQ #${rfq.rfq_id}`);
   } catch (err) {
     console.error(`❌ Failed to send confirmation email for RFQ #${rfq.rfq_id}:`, err);
   }
