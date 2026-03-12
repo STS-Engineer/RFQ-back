@@ -1057,38 +1057,7 @@ async function sendConfirmEmail(rfq) {
   }
 }
 
-router.put("/rfq/:id/status", async (req, res) => {
-  const { id } = req.params;
-  const { status } = req.body;
 
-  try {
-    const updateQuery = `
-      UPDATE public.main
-      SET status = $1
-      WHERE rfq_id = $2
-      RETURNING *;
-    `;
-    const result = await pool.query(updateQuery, [status, id]);
-
-    if (result.rows.length === 0) {
-      return res.status(404).json({ message: "RFQ not found" });
-    }
-
-    const updatedRfq = result.rows[0];
-
-    if (status === "CONFIRM") {
-      await sendConfirmEmail(updatedRfq);
-    }
-
-    res.status(200).json({
-      message: `RFQ status updated to ${status}`,
-      rfq: updatedRfq
-    });
-  } catch (error) {
-    console.error("Error updating RFQ status:", error);
-    res.status(500).json({ message: "Error updating RFQ status", error: error.message });
-  }
-});
 
 // Costing details endpoint
 router.get('/costing-details/:rfqId', async (req, res) => {
