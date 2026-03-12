@@ -4,6 +4,7 @@ const bodyParser = require('body-parser');
 require('dotenv').config();
       
 const rfqrouter = require('./services/rfqservice');
+const { startRfqListener } = require('./rfqListener'); 
 
 const app = express();
 
@@ -26,4 +27,8 @@ app.use('/ajouter', rfqrouter);
 app.get('/', (req, res) => res.send('Backend is running'));
 
 const port = process.env.PORT || 8080;
-app.listen(port, '0.0.0.0', () => console.log(`Server running on port ${port}`));
+app.listen(port, '0.0.0.0', () => {
+  console.log(`Server running on port ${port}`);
+  startRfqListener(); 
+});
+
