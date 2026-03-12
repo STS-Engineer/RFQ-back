@@ -10,6 +10,7 @@ const costingMap = {
   Seals:    { to: "mootaz.farwa@avocarbon.com",     firstName: "Mootaz" },
   Assembly: { to: "fatma.guermassi@avocarbon.com",  firstName: "Fatma" },
   Friction: { to: "FRICTION_EMAIL@avocarbon.com",   firstName: "FirstName" },
+  "Advanced Material": { to: "christine.lietard@avocarbon.com",   firstName: "Christine" },
 };
 
 const transporter = nodemailer.createTransport({
