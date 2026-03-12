@@ -653,16 +653,17 @@ router.get("/rfq", async (req, res) => {
 
     // 2️⃣ Fetch pending RFQs
     const pendingQuery = `
-      SELECT 
-        p.request_id AS rfq_id,
-        p.data->'rfq_payload' AS rfq_payload,
-        p.data->>'user_email' AS created_by_email,
-        p.data->>'validator_email' AS validated_by_email,
-        p.created_at AS rfq_created_at,
-        p.status
-      FROM public.pending_validations p
-      WHERE p.status = 'PENDING'
-      ORDER BY p.created_at DESC;
+   SELECT 
+    p.request_id AS internal_id,
+    p.data->'rfq_payload'->>'rfq_id' AS rfq_id,   -- ← use this instead
+    p.data->'rfq_payload' AS rfq_payload,
+    p.data->>'user_email' AS created_by_email,
+    p.data->>'validator_email' AS validated_by_email,
+    p.created_at AS rfq_created_at,
+    p.status
+    FROM public.pending_validations p
+    WHERE p.status = 'PENDING'
+    ORDER BY p.created_at DESC;
     `;
     const pendingResult = await pool.query(pendingQuery);
 
@@ -763,7 +764,8 @@ router.get("/rfq", async (req, res) => {
       });
 
       return {
-        rfq_id: row.rfq_id,
+        rfq_id: row.rfq_id || row.internal_id,  // "251009-CHK-00" from payload, fallback to UUID
+        internal_id: row.internal_id,
         customer_name: p?.customer_name || 'N/A',
         application: p?.application || 'N/A',
         product_line: p?.product_line || 'N/A',
