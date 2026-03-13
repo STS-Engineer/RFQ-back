@@ -5,12 +5,12 @@ const nodemailer = require('nodemailer');
 let activeClient = null;
 
 const costingMap = {
-  Chokes:   { to: "allan.riegel@avocarbon.com",     firstName: "Allan" },
-  Brushes:  { to: "francis.vimalraj@avocarbon.com", firstName: "Francis" },
-  Seals:    { to: "mootaz.farwa@avocarbon.com",     firstName: "Mootaz Farwa" },
-  Assembly: { to: "fatma.guermassi@avocarbon.com",  firstName: "Fatma" },
+  Chokes:   { to: "allan.riegel@avocarbon.com",     firstName: "Allan RIEGEL" },
+  Brushes:  { to: "francis.vimalraj@avocarbon.com", firstName: "Francis Vimalraj CHRISTARAJ" },
+  Seals:    { to: "olivier.spicker@avocarbon.com",  firstName: "Olivier SPICKER" },
+  Assembly: { to: "fatma.guermassi@avocarbon.com",  firstName: "Fatma GUERMASSI" },
   Friction: { to: "FRICTION_EMAIL@avocarbon.com",   firstName: "FirstName" },
-  "Advanced Material": { to: "christine.lietard@avocarbon.com",   firstName: "Christine" },
+  "Advanced Material": { to: "christine.lietard@avocarbon.com",   firstName: "Christine LIETARD" },
 };
 
 const transporter = nodemailer.createTransport({
