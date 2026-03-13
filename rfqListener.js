@@ -7,7 +7,7 @@ let activeClient = null;
 const costingMap = {
   Chokes:   { to: "allan.riegel@avocarbon.com",     firstName: "Allan" },
   Brushes:  { to: "francis.vimalraj@avocarbon.com", firstName: "Francis" },
-  Seals:    { to: "mootaz.farwa@avocarbon.com",     firstName: "Mootaz" },
+  Seals:    { to: "mootaz.farwa@avocarbon.com",     firstName: "Mootaz Farwa" },
   Assembly: { to: "fatma.guermassi@avocarbon.com",  firstName: "Fatma" },
   Friction: { to: "FRICTION_EMAIL@avocarbon.com",   firstName: "FirstName" },
   "Advanced Material": { to: "christine.lietard@avocarbon.com",   firstName: "Christine" },
