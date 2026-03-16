@@ -4,7 +4,7 @@ const bodyParser = require('body-parser');
 require('dotenv').config();
       
 const rfqrouter = require('./services/rfqservice');
-const { startRfqListener } = require('./rfqListener'); 
+const { startRfqListener } = require('./rfqListener');     
 
 const app = express();
 
